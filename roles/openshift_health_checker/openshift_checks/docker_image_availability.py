@@ -94,7 +94,8 @@ class DockerImageAvailability(DockerHostMixin, OpenShiftCheck):
         required = set()
         deployment_type = get_var(task_vars, "openshift_deployment_type")
         host_groups = get_var(task_vars, "group_names")
-        image_tag = get_var(task_vars, "openshift_image_tag")
+        # containerized etcd may not have openshift_image_tag, see bz 1466622
+        image_tag = get_var(task_vars, "openshift_image_tag", default="latest")
         image_info = DEPLOYMENT_IMAGE_INFO[deployment_type]
         if not image_info:
             return required
@@ -169,7 +170,7 @@ class DockerImageAvailability(DockerHostMixin, OpenShiftCheck):
             registries = [registry]
 
         for registry in registries:
-            args = {"_raw_params": "skopeo inspect docker://{}/{}".format(registry, image)}
+            args = {"_raw_params": "skopeo inspect --tls-verify=false docker://{}/{}".format(registry, image)}
             result = self.execute_module("command", args, task_vars=task_vars)
             if result.get("rc", 0) == 0 and not result.get("failed"):
                 return True

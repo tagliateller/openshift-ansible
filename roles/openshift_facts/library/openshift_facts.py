@@ -537,6 +537,7 @@ def set_node_schedulability(facts):
     return facts
 
 
+# pylint: disable=too-many-branches
 def set_selectors(facts):
     """ Set selectors facts if not already present in facts dict
         Args:
@@ -570,6 +571,10 @@ def set_selectors(facts):
         facts['hosted']['logging'] = {}
     if 'selector' not in facts['hosted']['logging'] or facts['hosted']['logging']['selector'] in [None, 'None']:
         facts['hosted']['logging']['selector'] = None
+    if 'etcd' not in facts['hosted']:
+        facts['hosted']['etcd'] = {}
+    if 'selector' not in facts['hosted']['etcd'] or facts['hosted']['etcd']['selector'] in [None, 'None']:
+        facts['hosted']['etcd']['selector'] = None
 
     return facts
 
@@ -907,17 +912,17 @@ def set_version_facts_if_unset(facts):
                 version_gte_3_1_1_or_1_1_1 = version >= LooseVersion('1.1.1')
                 version_gte_3_2_or_1_2 = version >= LooseVersion('1.2.0')
                 version_gte_3_3_or_1_3 = version >= LooseVersion('1.3.0')
-                version_gte_3_4_or_1_4 = version >= LooseVersion('1.4.0')
-                version_gte_3_5_or_1_5 = version >= LooseVersion('1.5.0')
-                version_gte_3_6 = version >= LooseVersion('3.6.0')
+                version_gte_3_4_or_1_4 = version >= LooseVersion('1.4')
+                version_gte_3_5_or_1_5 = version >= LooseVersion('1.5')
+                version_gte_3_6 = version >= LooseVersion('3.6')
             else:
                 version_gte_3_1_or_1_1 = version >= LooseVersion('3.0.2.905')
                 version_gte_3_1_1_or_1_1_1 = version >= LooseVersion('3.1.1')
                 version_gte_3_2_or_1_2 = version >= LooseVersion('3.1.1.901')
                 version_gte_3_3_or_1_3 = version >= LooseVersion('3.3.0')
-                version_gte_3_4_or_1_4 = version >= LooseVersion('3.4.0')
-                version_gte_3_5_or_1_5 = version >= LooseVersion('3.5.0')
-                version_gte_3_6 = version >= LooseVersion('3.6.0')
+                version_gte_3_4_or_1_4 = version >= LooseVersion('3.4')
+                version_gte_3_5_or_1_5 = version >= LooseVersion('3.5')
+                version_gte_3_6 = version >= LooseVersion('3.6')
         else:
             # 'Latest' version is set to True, 'Next' versions set to False
             version_gte_3_1_or_1_1 = True
@@ -1613,14 +1618,7 @@ def sort_unique(alist):
         Returns:
             list: a sorted de-duped list
     """
-
-    alist.sort()
-    out = list()
-    for i in alist:
-        if i not in out:
-            out.append(i)
-
-    return out
+    return sorted(list(set(alist)))
 
 
 def safe_get_bool(fact):
@@ -1644,19 +1642,36 @@ def set_proxy_facts(facts):
     """
     if 'common' in facts:
         common = facts['common']
+
+        # No openshift_no_proxy settings detected, empty list for now
+        if 'no_proxy' not in common:
+            common['no_proxy'] = []
+
+        # _no_proxy settings set. It is just a simple string, not a
+        # list or anything
+        elif 'no_proxy' in common and isinstance(common['no_proxy'], string_types):
+            # no_proxy is now a list of all the comma-separated items
+            # in the _no_proxy value
+            common['no_proxy'] = common['no_proxy'].split(",")
+
+        # at this point common['no_proxy'] is a LIST datastructure. It
+        # may be empty, or it may contain some hostnames or ranges.
+
+        # We always add local dns domain and ourselves no matter what
+        common['no_proxy'].append('.' + common['dns_domain'])
+        common['no_proxy'].append(common['hostname'])
+
+        # You are also setting system proxy vars, openshift_http_proxy/openshift_https_proxy
         if 'http_proxy' in common or 'https_proxy' in common:
-            if 'no_proxy' in common and isinstance(common['no_proxy'], string_types):
-                common['no_proxy'] = common['no_proxy'].split(",")
-            elif 'no_proxy' not in common:
-                common['no_proxy'] = []
+            # You want to generate no_proxy hosts and it's a boolean value
             if 'generate_no_proxy_hosts' in common and safe_get_bool(common['generate_no_proxy_hosts']):
+                # And you want to set up no_proxy for internal hostnames
                 if 'no_proxy_internal_hostnames' in common:
+                    # Split the internal_hostnames string by a comma
+                    # and add that list to the overall no_proxy list
                     common['no_proxy'].extend(common['no_proxy_internal_hostnames'].split(','))
-            # We always add local dns domain and ourselves no matter what
-            common['no_proxy'].append('.' + common['dns_domain'])
-            common['no_proxy'].append(common['hostname'])
-            common['no_proxy'] = ','.join(sort_unique(common['no_proxy']))
-        facts['common'] = common
+
+        common['no_proxy'] = ','.join(sort_unique(common['no_proxy']))
     return facts
 
 
@@ -2143,6 +2158,25 @@ class OpenShiftFacts(object):
                         volume=dict(
                             name='logging-es',
                             size='10Gi'
+                        ),
+                        nfs=dict(
+                            directory='/exports',
+                            options='*(rw,root_squash)'
+                        ),
+                        host=None,
+                        access=dict(
+                            modes=['ReadWriteOnce']
+                        ),
+                        create_pv=True,
+                        create_pvc=False
+                    )
+                ),
+                etcd=dict(
+                    storage=dict(
+                        kind=None,
+                        volume=dict(
+                            name='etcd',
+                            size='1Gi'
                         ),
                         nfs=dict(
                             directory='/exports',

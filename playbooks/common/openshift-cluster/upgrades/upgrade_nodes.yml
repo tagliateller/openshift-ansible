@@ -33,6 +33,7 @@
   - lib_openshift
   - openshift_facts
   - docker
+  - openshift_node_dnsmasq
   - openshift_node_upgrade
   - role: openshift_excluder
     r_openshift_excluder_action: enable

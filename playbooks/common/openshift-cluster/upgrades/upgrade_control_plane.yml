@@ -3,6 +3,16 @@
 # Upgrade Masters
 ###############################################################################
 
+# oc adm migrate storage should be run prior to etcd v3 upgrade
+# See: https://github.com/openshift/origin/pull/14625#issuecomment-308467060
+- name: Pre master upgrade - Upgrade all storage
+  hosts: oo_first_master
+  tasks:
+  - name: Upgrade all storage
+    command: >
+      {{ openshift.common.client_binary }} adm --config={{ openshift.common.config_base }}/master/admin.kubeconfig
+      migrate storage --include=* --confirm
+
 # If facts cache were for some reason deleted, this fact may not be set, and if not set
 # it will always default to true. This causes problems for the etcd data dir fact detection
 # so we must first make sure this is set correctly before attempting the backup.
@@ -133,6 +143,14 @@
   - set_fact:
       master_update_complete: True
 
+- name: Post master upgrade - Upgrade clusterpolicies storage
+  hosts: oo_first_master
+  tasks:
+  - name: Upgrade clusterpolicies storage
+    command: >
+      {{ openshift.common.client_binary }} adm --config={{ openshift.common.config_base }}/master/admin.kubeconfig
+      migrate storage --include=clusterpolicies --confirm
+
 ##############################################################################
 # Gate on master update complete
 ##############################################################################
@@ -212,6 +230,12 @@
     - reconcile_scc_result.rc == 0
     run_once: true
 
+  - name: Upgrade job storage
+    command: >
+      {{ openshift.common.client_binary }} adm --config={{ openshift.common.config_base }}/master/admin.kubeconfig
+      migrate storage --include=* --confirm
+    run_once: true
+
   - set_fact:
       reconcile_complete: True
 
@@ -277,6 +301,7 @@
   - lib_openshift
   - openshift_facts
   - docker
+  - openshift_node_dnsmasq
   - openshift_node_upgrade
 
   post_tasks:

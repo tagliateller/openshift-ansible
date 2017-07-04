@@ -26,7 +26,7 @@
   - kind: "sa"
     name: "heketi-{{ glusterfs_name }}-service-account"
   - kind: "secret"
-    name: "heketi-{{ glusterfs_name }}-user-secret"
+    name: "heketi-{{ glusterfs_name }}-admin-secret"
   failed_when: False
   when: glusterfs_heketi_wipe
 
@@ -66,6 +66,7 @@
 
 - name: Add heketi service account to privileged SCC
   oc_adm_policy_user:
+    namespace: "{{ glusterfs_namespace }}"
     user: "system:serviceaccount:{{ glusterfs_namespace }}:heketi-{{ glusterfs_name }}-service-account"
     resource_kind: scc
     resource_name: privileged
@@ -74,6 +75,7 @@
 
 - name: Allow heketi service account to view/edit pods
   oc_adm_policy_user:
+    namespace: "{{ glusterfs_namespace }}"
     user: "system:serviceaccount:{{ glusterfs_namespace }}:heketi-{{ glusterfs_name }}-service-account"
     resource_kind: role
     resource_name: edit
@@ -123,21 +125,32 @@
   when:
   - glusterfs_heketi_topology_load
 
+- name: Generate heketi admin key
+  set_fact:
+    glusterfs_heketi_admin_key: "{{ 32 | oo_generate_secret }}"
+  when:
+  - glusterfs_heketi_is_native
+  - glusterfs_heketi_admin_key is undefined
+
+- name: Generate heketi user key
+  set_fact:
+    glusterfs_heketi_user_key: "{{ 32 | oo_generate_secret }}"
+  until: "glusterfs_heketi_user_key != glusterfs_heketi_admin_key"
+  delay: 1
+  retries: 10
+  when:
+  - glusterfs_heketi_is_native
+  - glusterfs_heketi_user_key is undefined
+
 - include: heketi_deploy_part1.yml
   when:
   - glusterfs_heketi_is_native
   - glusterfs_heketi_deploy_is_missing
   - glusterfs_heketi_is_missing
 
-- name: Set heketi URL
-  set_fact:
-    glusterfs_heketi_url: "localhost:8080"
-  when:
-  - glusterfs_heketi_is_native
-
 - name: Set heketi-cli command
   set_fact:
-    glusterfs_heketi_client: "{% if glusterfs_heketi_is_native %}oc rsh {{ heketi_pod.results.results[0]['items'][0]['metadata']['name'] }} {% endif %}heketi-cli -s http://{{ glusterfs_heketi_url }} --user admin --secret '{{ glusterfs_heketi_admin_key }}'"
+    glusterfs_heketi_client: "{% if glusterfs_heketi_is_native %}{{ openshift.common.client_binary }} rsh --namespace={{ glusterfs_namespace }} {{ heketi_pod.results.results[0]['items'][0]['metadata']['name'] }} {% endif %}heketi-cli -s http://{% if glusterfs_heketi_is_native %}localhost:8080{% else %}{{ glusterfs_heketi_url }}:{{ glusterfs_heketi_port }}{% endif %} --user admin --secret '{{ glusterfs_heketi_admin_key }}'"
 
 - name: Verify heketi service
   command: "{{ glusterfs_heketi_client }} cluster list"
@@ -155,21 +168,43 @@
   - glusterfs_heketi_is_native
   - glusterfs_heketi_is_missing
 
-- name: Create heketi user secret
+- name: Create heketi secret
   oc_secret:
     namespace: "{{ glusterfs_namespace }}"
     state: present
-    name: "heketi-{{ glusterfs_name }}-user-secret"
+    name: "heketi-{{ glusterfs_name }}-admin-secret"
     type: "kubernetes.io/glusterfs"
     force: True
     contents:
     - path: key
-      data: "{{ glusterfs_heketi_user_key }}"
+      data: "{{ glusterfs_heketi_admin_key }}"
+  when:
+  - glusterfs_storageclass
+
+- name: Get heketi route
+  oc_obj:
+    namespace: "{{ glusterfs_namespace }}"
+    kind: route
+    state: list
+    name: "heketi-{{ glusterfs_name }}"
+  register: heketi_route
+  when:
+  - glusterfs_storageclass
+  - glusterfs_heketi_is_native
+
+- name: Determine StorageClass heketi URL
+  set_fact:
+    glusterfs_heketi_route: "{{ heketi_route.results.results[0]['spec']['host'] }}"
+  when:
+  - glusterfs_storageclass
+  - glusterfs_heketi_is_native
 
 - name: Generate GlusterFS StorageClass file
   template:
     src: "{{ openshift.common.examples_content_version }}/glusterfs-storageclass.yml.j2"
     dest: "{{ mktemp.stdout }}/glusterfs-storageclass.yml"
+  when:
+  - glusterfs_storageclass
 
 - name: Create GlusterFS StorageClass
   oc_obj:

@@ -1,4 +1,7 @@
 ---
+- set_fact:
+    l_etcd_src_data_dir: "{{ '/var/lib/origin/openshift.local.etcd' if r_etcd_common_embedded_etcd | bool else '/var/lib/etcd/' }}"
+
 - name: Pull etcd system container
   command: atomic pull --storage=ostree {{ openshift.etcd.etcd_image }}
   register: pull_result
@@ -24,26 +27,33 @@
   systemd:
     name: etcd
     state: stopped
-    enabled: yes
+    enabled: no
     masked: no
     daemon_reload: yes
   register: task_result
   failed_when: task_result|failed and 'could not' not in task_result.msg|lower
-  when: "'etcd' in etcd_result.stdout"
+  when: "'etcd' not in etcd_result.stdout"
 
 - name: Disable etcd_container
   systemd:
     name: etcd_container
     state: stopped
     enabled: no
-    masked: yes
     daemon_reload: yes
   register: task_result
   failed_when: task_result|failed and 'could not' not in task_result.msg|lower
 
+- name: Remove etcd_container.service
+  file:
+    path: /etc/systemd/system/etcd_container.service
+    state: absent
+
+- name: Systemd reload configuration
+  systemd: name=etcd_container daemon_reload=yes
+
 - name: Check for previous etcd data store
   stat:
-    path: "{{ etcd_data_dir }}/member/"
+    path: "{{ l_etcd_src_data_dir }}/member/"
   register: src_datastore
 
 - name: Check for etcd system container data store
@@ -59,7 +69,7 @@
 
 - name: Copy etcd data store
   command: >
-    cp -a {{ etcd_data_dir }}/member
+    cp -a {{ l_etcd_src_data_dir }}/member
     {{ r_etcd_common_system_container_host_dir }}/etcd.etcd/member
   when:
     - src_datastore.stat.exists

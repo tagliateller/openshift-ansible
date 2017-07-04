@@ -173,9 +173,8 @@
     selector:
       component: "{{ es_component }}"
       provider: openshift
-    # pending #4091
-    #labels:
-    #- logging-infra: 'support'
+    labels:
+      logging-infra: 'support'
     ports:
     - port: 9300
 
@@ -187,14 +186,15 @@
     selector:
       component: "{{ es_component }}"
       provider: openshift
-    # pending #4091
-    #labels:
-    #- logging-infra: 'support'
+    labels:
+      logging-infra: 'support'
     ports:
     - port: 9200
       targetPort: "restapi"
 
-- name: Creating ES storage template
+# storageclasses are used by default but if static then disable
+# storageclasses with the storageClassName set to "" in pvc.j2
+- name: Creating ES storage template - static
   template:
     src: pvc.j2
     dest: "{{ tempdir }}/templates/logging-es-pvc.yml"
@@ -203,11 +203,13 @@
     size: "{{ openshift_logging_elasticsearch_pvc_size }}"
     access_modes: "{{ openshift_logging_elasticsearch_pvc_access_modes | list }}"
     pv_selector: "{{ openshift_logging_elasticsearch_pvc_pv_selector }}"
+    storage_class_name: "{{ openshift_logging_elasticsearch_pvc_storage_class_name | default('', true) }}"
   when:
   - openshift_logging_elasticsearch_storage_type == "pvc"
   - not openshift_logging_elasticsearch_pvc_dynamic
 
-- name: Creating ES storage template
+# Storageclasses are used by default if configured
+- name: Creating ES storage template - dynamic
   template:
     src: pvc.j2
     dest: "{{ tempdir }}/templates/logging-es-pvc.yml"
@@ -216,8 +218,6 @@
     size: "{{ openshift_logging_elasticsearch_pvc_size }}"
     access_modes: "{{ openshift_logging_elasticsearch_pvc_access_modes | list }}"
     pv_selector: "{{ openshift_logging_elasticsearch_pvc_pv_selector }}"
-    annotations:
-      volume.beta.kubernetes.io/storage-class: "dynamic"
   when:
   - openshift_logging_elasticsearch_storage_type == "pvc"
   - openshift_logging_elasticsearch_pvc_dynamic
@@ -268,6 +268,75 @@
     files:
     - "{{ tempdir }}/templates/logging-es-dc.yml"
     delete_after: true
+
+- name: Retrieving the cert to use when generating secrets for the {{ es_component }} component
+  slurp:
+    src: "{{ generated_certs_dir }}/{{ item.file }}"
+  register: key_pairs
+  with_items:
+  - { name: "ca_file", file: "ca.crt" }
+  - { name: "es_key", file: "system.logging.es.key" }
+  - { name: "es_cert", file: "system.logging.es.crt" }
+  when: openshift_logging_es_allow_external | bool
+
+- set_fact:
+    es_key: "{{ lookup('file', openshift_logging_es_key) | b64encode }}"
+  when:
+  - openshift_logging_es_key | trim | length > 0
+  - openshift_logging_es_allow_external | bool
+  changed_when: false
+
+- set_fact:
+    es_cert: "{{ lookup('file', openshift_logging_es_cert) | b64encode  }}"
+  when:
+  - openshift_logging_es_cert | trim | length > 0
+  - openshift_logging_es_allow_external | bool
+  changed_when: false
+
+- set_fact:
+    es_ca: "{{ lookup('file', openshift_logging_es_ca_ext) | b64encode  }}"
+  when:
+  - openshift_logging_es_ca_ext | trim | length > 0
+  - openshift_logging_es_allow_external | bool
+  changed_when: false
+
+- set_fact:
+    es_ca: "{{ key_pairs | entry_from_named_pair('ca_file') }}"
+  when:
+  - es_ca is not defined
+  - openshift_logging_es_allow_external | bool
+  changed_when: false
+
+- name: Generating Elasticsearch {{ es_component }} route template
+  template:
+    src: route_reencrypt.j2
+    dest: "{{mktemp.stdout}}/templates/logging-{{ es_component }}-route.yaml"
+  vars:
+    obj_name: "logging-{{ es_component }}"
+    route_host: "{{ openshift_logging_es_hostname }}"
+    service_name: "logging-{{ es_component }}"
+    tls_key: "{{ es_key | default('') | b64decode }}"
+    tls_cert: "{{ es_cert | default('') | b64decode }}"
+    tls_ca_cert: "{{ es_ca | b64decode }}"
+    tls_dest_ca_cert: "{{ key_pairs | entry_from_named_pair('ca_file') | b64decode }}"
+    edge_term_policy: "{{ openshift_logging_es_edge_term_policy | default('') }}"
+    labels:
+      component: support
+      logging-infra: support
+      provider: openshift
+  changed_when: no
+  when: openshift_logging_es_allow_external | bool
+
+# This currently has an issue if the host name changes
+- name: Setting Elasticsearch {{ es_component }} route
+  oc_obj:
+    state: present
+    name: "logging-{{ es_component }}"
+    namespace: "{{ openshift_logging_elasticsearch_namespace }}"
+    kind: route
+    files:
+    - "{{ tempdir }}/templates/logging-{{ es_component }}-route.yaml"
+  when: openshift_logging_es_allow_external | bool
 
 ## Placeholder for migration when necessary ##
 

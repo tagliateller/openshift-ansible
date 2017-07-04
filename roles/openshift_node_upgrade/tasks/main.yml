@@ -31,6 +31,20 @@
   failed_when: false
   when: openshift.common.is_containerized | bool
 
+- name: Pre-pull node image
+  command: >
+    docker pull {{ openshift.node.node_image }}:{{ openshift_image_tag }}
+  register: pull_result
+  changed_when: "'Downloaded newer image' in pull_result.stdout"
+  when: openshift.common.is_containerized | bool
+
+- name: Pre-pull openvswitch image
+  command: >
+    docker pull {{ openshift.node.ovs_image }}:{{ openshift_image_tag }}
+  register: pull_result
+  changed_when: "'Downloaded newer image' in pull_result.stdout"
+  when: openshift.common.is_containerized | bool and openshift.common.use_openshift_sdn | bool
+
 - include: docker/upgrade.yml
   vars:
     # We will restart Docker ourselves after everything is ready:
@@ -133,6 +147,17 @@
   - ansible_selinux is defined
   - ansible_selinux.status == 'enabled'
 
+- name: Apply 3.6 dns config changes
+  yedit:
+    src: /etc/origin/node/node-config.yaml
+    key: "{{ item.key }}"
+    value: "{{ item.value }}"
+  with_items:
+  - key: "dnsBindAddress"
+    value: "127.0.0.1:53"
+  - key: "dnsRecursiveResolvConf"
+    value: "/etc/origin/node/resolv.conf"
+
 # Restart all services
 - include: restart.yml
 
@@ -147,3 +172,6 @@
   # Give the node two minutes to come back online.
   retries: 24
   delay: 5
+
+- include_role:
+    name: openshift_node_dnsmasq
