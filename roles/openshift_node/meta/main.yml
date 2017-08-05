@@ -12,6 +12,7 @@ galaxy_info:
   categories:
   - cloud
 dependencies:
+- role: openshift_node_facts
 - role: lib_openshift
 - role: openshift_common
 - role: openshift_clock
@@ -30,7 +31,7 @@ dependencies:
   os_firewall_allow:
   - service: OpenShift OVS sdn
     port: 4789/udp
-  when: openshift.common.use_openshift_sdn | bool
+  when: openshift.common.use_openshift_sdn | default(true) | bool
 - role: os_firewall
   os_firewall_allow:
   - service: Calico BGP Port

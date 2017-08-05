@@ -12,6 +12,12 @@
       traditional docker package install. Otherwise, comment out openshift_docker_options
       in your inventory file.
 
+- name: Ensure container-selinux is installed
+  package:
+    name: container-selinux
+    state: present
+  when: not openshift.common.is_atomic | bool
+
 # Used to pull and install the system container
 - name: Ensure atomic is installed
   package:
@@ -40,6 +46,11 @@
     state: stopped
     daemon_reload: yes
   ignore_errors: True
+  register: r_docker_systemcontainer_docker_stop_result
+  until: not r_docker_systemcontainer_docker_stop_result | failed
+  retries: 3
+  delay: 30
+
 
 # Set http_proxy, https_proxy, and no_proxy in /etc/atomic.conf
 # regexp: the line starts with or without #, followed by the string
@@ -86,7 +97,7 @@
 
     - name: Use Fedora Registry for image when distribution is Fedora
       set_fact:
-        l_docker_image_prepend: "registry.fedoraproject.org"
+        l_docker_image_prepend: "registry.fedoraproject.org/f25"
       when: ansible_distribution == 'Fedora'
 
     # For https://github.com/openshift/openshift-ansible/pull/4049#discussion_r114478504
@@ -154,9 +165,12 @@
     enabled: yes
     state: started
     daemon_reload: yes
-  register: start_result
+  register: r_docker_systemcontainer_docker_start_result
+  until: not r_docker_systemcontainer_docker_start_result | failed
+  retries: 3
+  delay: 30
 
 - set_fact:
-    docker_service_status_changed: start_result | changed
+    docker_service_status_changed: "{{ r_docker_systemcontainer_docker_start_result | changed }}"
 
 - meta: flush_handlers

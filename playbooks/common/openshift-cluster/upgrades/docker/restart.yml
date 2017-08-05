@@ -1,6 +1,10 @@
 ---
 - name: Restart docker
   service: name=docker state=restarted
+  register: l_docker_restart_docker_in_upgrade_result
+  until: not l_docker_restart_docker_in_upgrade_result | failed
+  retries: 3
+  delay: 30
 
 - name: Update docker facts
   openshift_facts:
@@ -24,4 +28,5 @@
     state: started
     delay: 10
     port: "{{ openshift.master.api_port }}"
+    timeout: 600
   when: inventory_hostname in groups.oo_masters_to_config

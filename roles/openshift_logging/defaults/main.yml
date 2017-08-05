@@ -72,7 +72,6 @@ openshift_logging_fluentd_nodeselector: "{{ openshift_hosted_logging_fluentd_nod
 openshift_logging_fluentd_cpu_limit: 100m
 openshift_logging_fluentd_memory_limit: 512Mi
 openshift_logging_fluentd_es_copy: false
-openshift_logging_fluentd_use_journal: "{{ openshift_hosted_logging_use_journal if openshift_hosted_logging_use_journal is defined else (docker_log_driver == 'journald') | ternary(True, False) if docker_log_driver is defined else (openshift.docker.log_driver == 'journald') | ternary(True, False) if openshift.docker.log_driver is defined else openshift.docker.options | search('--log-driver=journald') if openshift.docker.options is defined else default(omit) }}"
 openshift_logging_fluentd_journal_source: "{{ openshift_hosted_logging_journal_source | default('') }}"
 openshift_logging_fluentd_journal_read_from_head: "{{ openshift_hosted_logging_journal_read_from_head | default('') }}"
 openshift_logging_fluentd_hosts: ['--all']
@@ -158,8 +157,6 @@ openshift_logging_storage_access_modes: "{{ openshift_hosted_logging_storage_acc
 # mux - secure_forward listener service
 openshift_logging_mux_allow_external: False
 openshift_logging_use_mux: "{{ openshift_logging_mux_allow_external | default(False) }}"
-# this tells the fluentd node agent to use mux instead of sending directly to Elasticsearch
-openshift_logging_use_mux_client: False
 openshift_logging_mux_hostname: "{{ 'mux.' ~ (openshift_master_default_subdomain | default('router.default.svc.cluster.local', true)) }}"
 openshift_logging_mux_port: 24284
 openshift_logging_mux_cpu_limit: 500m

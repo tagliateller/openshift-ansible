@@ -52,11 +52,12 @@ When both `openshift_logging_install_logging` and `openshift_logging_upgrade_log
 - `openshift_logging_fluentd_cpu_limit`: The CPU limit for Fluentd pods. Defaults to '100m'.
 - `openshift_logging_fluentd_memory_limit`: The memory limit for Fluentd pods. Defaults to '512Mi'.
 - `openshift_logging_fluentd_es_copy`: Whether or not to use the ES_COPY feature for Fluentd (DEPRECATED). Defaults to 'False'.
-- `openshift_logging_fluentd_use_journal`: NOTE: Fluentd will attempt to detect whether or not Docker is using the journald log driver when using the default of empty.
+- `openshift_logging_fluentd_use_journal`: *DEPRECATED - DO NOT USE* Fluentd will automatically detect whether or not Docker is using the journald log driver.
 - `openshift_logging_fluentd_journal_read_from_head`: If empty, Fluentd will use its internal default, which is false.
 - `openshift_logging_fluentd_hosts`: List of nodes that should be labeled for Fluentd to be deployed to. Defaults to ['--all'].
 - `openshift_logging_fluentd_buffer_queue_limit`: Buffer queue limit for Fluentd. Defaults to 1024.
 - `openshift_logging_fluentd_buffer_size_limit`: Buffer chunk limit for Fluentd. Defaults to 1m.
+- `openshift_logging_fluentd_file_buffer_limit`: Fluentd will set the value to the file buffer limit.  Defaults to '1Gi' per destination.
 
 
 - `openshift_logging_es_host`: The name of the ES service Fluentd should send logs to. Defaults to 'logging-es'.
@@ -134,16 +135,23 @@ Elasticsearch OPS too, if using an OPS cluster:
   secure_forward forwarder for the node agent Fluentd daemonsets running in the
   cluster.  This can be used to reduce the number of connections to the
   OpenShift API server, by using `mux` and configuring each node Fluentd to
-  send raw logs to mux and turn off the k8s metadata plugin.
+  send raw logs to mux and turn off the k8s metadata plugin.  This requires the
+  use of `openshift_logging_mux_client_mode` (see below).
 - `openshift_logging_mux_allow_external`: Default `False`.  If this is `True`,
   the `mux` service will be deployed, and it will be configured to allow
   Fluentd clients running outside of the cluster to send logs using
   secure_forward.  This allows OpenShift logging to be used as a central
   logging service for clients other than OpenShift, or other OpenShift
   clusters.
-- `openshift_logging_use_mux_client`: Default `False`.  If this is `True`, the
-  node agent Fluentd services will be configured to send logs to the mux
-  service rather than directly to Elasticsearch.
+- `openshift_logging_mux_client_mode`: Values - `minimal`, `maximal`.
+  Default is unset.  Setting this value will cause the Fluentd node agent to
+  send logs to mux rather than directly to Elasticsearch.  The value
+  `maximal` means that Fluentd will do as much processing as possible at the
+  node before sending the records to mux.  This is the current recommended
+  way to use mux due to current scaling issues.
+  The value `minimal` means that Fluentd will do *no* processing at all, and
+  send the raw logs to mux for processing.  We do not currently recommend using
+  this mode, and ansible will warn you about this.
 - `openshift_logging_mux_hostname`: Default is "mux." +
   `openshift_master_default_subdomain`.  This is the hostname *external*_
   clients will use to connect to mux, and will be used in the TLS server cert
@@ -160,3 +168,18 @@ Elasticsearch OPS too, if using an OPS cluster:
   need to set this
 - `openshift_logging_mux_buffer_queue_limit`: Default `[1024]` - Buffer queue limit for Mux.
 - `openshift_logging_mux_buffer_size_limit`: Default `[1m]` - Buffer chunk limit for Mux.
+- `openshift_logging_mux_file_buffer_limit`: Default `[2Gi]` per destination - Mux will
+  set the value to the file buffer limit.
+- `openshift_logging_mux_file_buffer_storage_type`: Default `[emptydir]` - Storage
+  type for the file buffer.  One of [`emptydir`, `pvc`, `hostmount`]
+
+- `openshift_logging_mux_file_buffer_pvc_size`: The requested size for the file buffer
+  PVC, when not provided the role will not generate any PVCs. Defaults to `4Gi`.
+- `openshift_logging_mux_file_buffer_pvc_dynamic`: Whether or not to add the dynamic
+  PVC annotation for any generated PVCs. Defaults to 'False'.
+- `openshift_logging_mux_file_buffer_pvc_pv_selector`: A key/value map added to a PVC
+  in order to select specific PVs.  Defaults to 'None'.
+- `openshift_logging_mux_file_buffer_pvc_prefix`: The prefix for the generated PVCs.
+  Defaults to 'logging-mux'.
+- `openshift_logging_mux_file_buffer_storage_group`: The storage group used for Mux.
+  Defaults to '65534'.

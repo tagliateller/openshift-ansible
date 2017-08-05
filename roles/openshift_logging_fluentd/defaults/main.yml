@@ -28,7 +28,6 @@ openshift_logging_fluentd_ops_host: "{{ openshift_logging_fluentd_app_host }}"
 openshift_logging_fluentd_ops_port: "{{ openshift_logging_fluentd_app_port }}"
 
 ### Used by "hosted" and "secure-aggregator" deployments
-#openshift_logging_fluentd_use_journal: "{{ openshift_hosted_logging_use_journal }}"
 openshift_logging_fluentd_journal_source: "{{ openshift_hosted_logging_journal_source | default('') }}"
 openshift_logging_fluentd_journal_read_from_head: "{{ openshift_hosted_logging_journal_read_from_head | default('') }}"
 
@@ -57,3 +56,5 @@ openshift_logging_fluentd_es_copy: false
 #fluentd_config_contents:
 #fluentd_throttle_contents:
 #fluentd_secureforward_contents:
+
+openshift_logging_fluentd_file_buffer_limit: 1Gi

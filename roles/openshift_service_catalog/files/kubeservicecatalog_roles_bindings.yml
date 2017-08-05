@@ -99,7 +99,6 @@ objects:
     - ""
     resources:
     - secrets
-    - podpresets
     verbs:
     - create
     - update
@@ -115,6 +114,45 @@ objects:
     - bindings/status
     verbs:
     - update
+  - apiGroups:
+    - servicecatalog.k8s.io
+    resources:
+    - brokers
+    - instances
+    - bindings
+    verbs:
+    - list
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - events
+    verbs:
+    - patch
+    - create
+  - apiGroups:
+    - servicecatalog.k8s.io
+    resources:
+    - serviceclasses
+    verbs:
+    - create
+    - delete
+    - update
+    - patch
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - settings.k8s.io
+    resources:
+    - podpresets
+    verbs:
+    - create
+    - update
+    - delete
+    - get
+    - list
+    - watch
 
 - kind: ClusterRoleBinding
   apiVersion: v1

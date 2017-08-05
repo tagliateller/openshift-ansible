@@ -11,7 +11,7 @@ logging_namespace = "logging"
 
 def canned_loggingcheck(exec_oc=None):
     """Create a LoggingCheck object with canned exec_oc method"""
-    check = LoggingCheck("dummy")  # fails if a module is actually invoked
+    check = LoggingCheck()  # fails if a module is actually invoked
     check.logging_namespace = 'logging'
     if exec_oc:
         check.exec_oc = exec_oc
@@ -50,6 +50,16 @@ plain_kibana_pod = {
     }
 }
 
+plain_kibana_pod_no_containerstatus = {
+    "metadata": {
+        "labels": {"component": "kibana", "deploymentconfig": "logging-kibana"},
+        "name": "logging-kibana-1",
+    },
+    "status": {
+        "conditions": [{"status": "True", "type": "Ready"}],
+    }
+}
+
 fluentd_pod_node1 = {
     "metadata": {
         "labels": {"component": "fluentd", "deploymentconfig": "logging-fluentd"},
@@ -80,15 +90,15 @@ plain_curator_pod = {
     ("Permission denied", "Unexpected error using `oc`"),
 ])
 def test_oc_failure(problem, expect):
-    def execute_module(module_name, args, task_vars):
+    def execute_module(module_name, *_):
         if module_name == "ocutil":
             return dict(failed=True, result=problem)
         return dict(changed=False)
 
-    check = LoggingCheck({})
+    check = LoggingCheck(execute_module, task_vars_config_base)
 
     with pytest.raises(OpenShiftCheckException) as excinfo:
-        check.exec_oc(execute_module, logging_namespace, 'get foo', [], task_vars=task_vars_config_base)
+        check.exec_oc(logging_namespace, 'get foo', [])
     assert expect in str(excinfo)
 
 
@@ -111,14 +121,14 @@ def test_is_active(groups, logging_deployed, is_active):
         openshift_hosted_logging_deploy=logging_deployed,
     )
 
-    assert LoggingCheck.is_active(task_vars=task_vars) == is_active
+    assert LoggingCheck(None, task_vars).is_active() == is_active
 
 
 @pytest.mark.parametrize('pod_output, expect_pods, expect_error', [
     (
         'No resources found.',
         None,
-        'There are no pods in the logging namespace',
+        'No pods were found for the "es"',
     ),
     (
         json.dumps({'items': [plain_kibana_pod, plain_es_pod, plain_curator_pod, fluentd_pod_node1]}),
@@ -127,11 +137,29 @@ def test_is_active(groups, logging_deployed, is_active):
     ),
 ])
 def test_get_pods_for_component(pod_output, expect_pods, expect_error):
-    check = canned_loggingcheck(lambda exec_module, namespace, cmd, args, task_vars: pod_output)
+    check = canned_loggingcheck(lambda namespace, cmd, args: pod_output)
     pods, error = check.get_pods_for_component(
-        lambda name, args, task_vars: {},
         logging_namespace,
         "es",
-        {}
     )
     assert_error(error, expect_error)
+
+
+@pytest.mark.parametrize('name, pods, expected_pods', [
+    (
+        'test single pod found, scheduled, but no containerStatuses field',
+        [plain_kibana_pod_no_containerstatus],
+        [plain_kibana_pod_no_containerstatus],
+    ),
+    (
+        'set of pods has at least one pod with containerStatuses (scheduled); should still fail',
+        [plain_kibana_pod_no_containerstatus, plain_kibana_pod],
+        [plain_kibana_pod_no_containerstatus],
+    ),
+
+], ids=lambda argvals: argvals[0])
+def test_get_not_running_pods_no_container_status(name, pods, expected_pods):
+    check = canned_loggingcheck(lambda exec_module, namespace, cmd, args, task_vars: '')
+    result = check.not_running_pods(pods)
+
+    assert result == expected_pods

@@ -915,6 +915,7 @@ def set_version_facts_if_unset(facts):
                 version_gte_3_4_or_1_4 = version >= LooseVersion('1.4')
                 version_gte_3_5_or_1_5 = version >= LooseVersion('1.5')
                 version_gte_3_6 = version >= LooseVersion('3.6')
+                version_gte_3_7 = version >= LooseVersion('3.7')
             else:
                 version_gte_3_1_or_1_1 = version >= LooseVersion('3.0.2.905')
                 version_gte_3_1_1_or_1_1_1 = version >= LooseVersion('3.1.1')
@@ -923,6 +924,7 @@ def set_version_facts_if_unset(facts):
                 version_gte_3_4_or_1_4 = version >= LooseVersion('3.4')
                 version_gte_3_5_or_1_5 = version >= LooseVersion('3.5')
                 version_gte_3_6 = version >= LooseVersion('3.6')
+                version_gte_3_7 = version >= LooseVersion('3.7')
         else:
             # 'Latest' version is set to True, 'Next' versions set to False
             version_gte_3_1_or_1_1 = True
@@ -932,6 +934,7 @@ def set_version_facts_if_unset(facts):
             version_gte_3_4_or_1_4 = True
             version_gte_3_5_or_1_5 = True
             version_gte_3_6 = True
+            version_gte_3_7 = False
         facts['common']['version_gte_3_1_or_1_1'] = version_gte_3_1_or_1_1
         facts['common']['version_gte_3_1_1_or_1_1_1'] = version_gte_3_1_1_or_1_1_1
         facts['common']['version_gte_3_2_or_1_2'] = version_gte_3_2_or_1_2
@@ -939,8 +942,11 @@ def set_version_facts_if_unset(facts):
         facts['common']['version_gte_3_4_or_1_4'] = version_gte_3_4_or_1_4
         facts['common']['version_gte_3_5_or_1_5'] = version_gte_3_5_or_1_5
         facts['common']['version_gte_3_6'] = version_gte_3_6
+        facts['common']['version_gte_3_7'] = version_gte_3_7
 
-        if version_gte_3_6:
+        if version_gte_3_7:
+            examples_content_version = 'v3.7'
+        elif version_gte_3_6:
             examples_content_version = 'v3.6'
         elif version_gte_3_5_or_1_5:
             examples_content_version = 'v1.5'
@@ -1642,36 +1648,28 @@ def set_proxy_facts(facts):
     """
     if 'common' in facts:
         common = facts['common']
+        if 'http_proxy' in common or 'https_proxy' in common or 'no_proxy' in common:
+            if 'no_proxy' in common and isinstance(common['no_proxy'], string_types):
+                common['no_proxy'] = common['no_proxy'].split(",")
+            elif 'no_proxy' not in common:
+                common['no_proxy'] = []
 
-        # No openshift_no_proxy settings detected, empty list for now
-        if 'no_proxy' not in common:
-            common['no_proxy'] = []
+            # See https://bugzilla.redhat.com/show_bug.cgi?id=1466783
+            # masters behind a proxy need to connect to etcd via IP
+            if 'no_proxy_etcd_host_ips' in common:
+                if isinstance(common['no_proxy_etcd_host_ips'], string_types):
+                    common['no_proxy'].extend(common['no_proxy_etcd_host_ips'].split(','))
 
-        # _no_proxy settings set. It is just a simple string, not a
-        # list or anything
-        elif 'no_proxy' in common and isinstance(common['no_proxy'], string_types):
-            # no_proxy is now a list of all the comma-separated items
-            # in the _no_proxy value
-            common['no_proxy'] = common['no_proxy'].split(",")
-
-        # at this point common['no_proxy'] is a LIST datastructure. It
-        # may be empty, or it may contain some hostnames or ranges.
-
-        # We always add local dns domain and ourselves no matter what
-        common['no_proxy'].append('.' + common['dns_domain'])
-        common['no_proxy'].append(common['hostname'])
-
-        # You are also setting system proxy vars, openshift_http_proxy/openshift_https_proxy
-        if 'http_proxy' in common or 'https_proxy' in common:
-            # You want to generate no_proxy hosts and it's a boolean value
             if 'generate_no_proxy_hosts' in common and safe_get_bool(common['generate_no_proxy_hosts']):
-                # And you want to set up no_proxy for internal hostnames
                 if 'no_proxy_internal_hostnames' in common:
-                    # Split the internal_hostnames string by a comma
-                    # and add that list to the overall no_proxy list
                     common['no_proxy'].extend(common['no_proxy_internal_hostnames'].split(','))
+            # We always add local dns domain and ourselves no matter what
+            common['no_proxy'].append('.' + common['dns_domain'])
+            common['no_proxy'].append('.svc')
+            common['no_proxy'].append(common['hostname'])
+            common['no_proxy'] = ','.join(sort_unique(common['no_proxy']))
+        facts['common'] = common
 
-        common['no_proxy'] = ','.join(sort_unique(common['no_proxy']))
     return facts
 
 
@@ -2230,14 +2228,10 @@ class OpenShiftFacts(object):
         product_version = self.system_facts['ansible_product_version']
         virt_type = self.system_facts['ansible_virtualization_type']
         virt_role = self.system_facts['ansible_virtualization_role']
+        bios_vendor = self.system_facts['ansible_system_vendor']
         provider = None
         metadata = None
 
-        # TODO: this is not exposed through module_utils/facts.py in ansible,
-        # need to create PR for ansible to expose it
-        bios_vendor = get_file_content(  # noqa: F405
-            '/sys/devices/virtual/dmi/id/bios_vendor'
-        )
         if bios_vendor == 'Google':
             provider = 'gce'
             metadata_url = ('http://metadata.google.internal/'

@@ -1,4 +1,8 @@
 ---
+- include: std_include.yml
+  tags:
+  - always
+
 # TODO: refactor this into its own include
 # and pass a variable for ctx
 - name: Verify Requirements
@@ -6,7 +10,7 @@
   roles:
   - openshift_health_checker
   vars:
-  - r_openshift_health_checker_playbook_context: "install"
+  - r_openshift_health_checker_playbook_context: install
   post_tasks:
   - action: openshift_health_check
     args:

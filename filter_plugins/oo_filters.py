@@ -194,10 +194,10 @@ def oo_select_keys_from_list(data, keys):
     """
 
     if not isinstance(data, list):
-        raise errors.AnsibleFilterError("|failed expects to filter on a list")
+        raise errors.AnsibleFilterError("|oo_select_keys_from_list failed expects to filter on a list")
 
     if not isinstance(keys, list):
-        raise errors.AnsibleFilterError("|failed expects first param is a list")
+        raise errors.AnsibleFilterError("|oo_select_keys_from_list failed expects first param is a list")
 
     # Gather up the values for the list of keys passed in
     retval = [oo_select_keys(item, keys) for item in data]
@@ -213,10 +213,10 @@ def oo_select_keys(data, keys):
     """
 
     if not isinstance(data, Mapping):
-        raise errors.AnsibleFilterError("|failed expects to filter on a dict or object")
+        raise errors.AnsibleFilterError("|oo_select_keys failed expects to filter on a dict or object")
 
     if not isinstance(keys, list):
-        raise errors.AnsibleFilterError("|failed expects first param is a list")
+        raise errors.AnsibleFilterError("|oo_select_keys failed expects first param is a list")
 
     # Gather up the values for the list of keys passed in
     retval = [data[key] for key in keys if key in data]
@@ -1009,6 +1009,21 @@ def oo_random_word(length, source='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRS
     return ''.join(random.choice(source) for i in range(length))
 
 
+def oo_contains_rule(source, apiGroups, resources, verbs):
+    '''Return true if the specified rule is contained within the provided source'''
+
+    rules = source['rules']
+
+    if rules:
+        for rule in rules:
+            if set(rule['apiGroups']) == set(apiGroups):
+                if set(rule['resources']) == set(resources):
+                    if set(rule['verbs']) == set(verbs):
+                        return True
+
+    return False
+
+
 class FilterModule(object):
     """ Custom ansible filter mapping """
 
@@ -1049,5 +1064,6 @@ class FilterModule(object):
             "oo_openshift_loadbalancer_frontends": oo_openshift_loadbalancer_frontends,
             "oo_openshift_loadbalancer_backends": oo_openshift_loadbalancer_backends,
             "to_padded_yaml": to_padded_yaml,
-            "oo_random_word": oo_random_word
+            "oo_random_word": oo_random_word,
+            "oo_contains_rule": oo_contains_rule
         }

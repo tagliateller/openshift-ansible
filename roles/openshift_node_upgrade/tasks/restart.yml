@@ -19,7 +19,7 @@
     state: started
   register: docker_start_result
   until: not docker_start_result | failed
-  retries: 1
+  retries: 3
   delay: 30
 
 - name: Update docker facts
@@ -43,4 +43,5 @@
     state: started
     delay: 10
     port: "{{ openshift.master.api_port }}"
+    timeout: 600
   when: inventory_hostname in groups.oo_masters_to_config

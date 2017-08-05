@@ -15,19 +15,23 @@
     msg: Invalid deployment type, one of ['hosted', 'secure-aggregator', 'secure-host'] allowed
   when: not openshift_logging_fluentd_deployment_type in __allowed_fluentd_types
 
+- debug:
+    msg: openshift_logging_fluentd_use_journal is deprecated.  Fluentd will automatically detect which logging driver is being used.
+  when: openshift_logging_fluentd_use_journal is defined
+
+- debug:
+    msg: openshift_hosted_logging_use_journal is deprecated.  Fluentd will automatically detect which logging driver is being used.
+  when: openshift_hosted_logging_use_journal is defined
+
+- fail:
+    msg: Invalid openshift_logging_mux_client_mode [{{ openshift_logging_mux_client_mode }}], one of {{ __allowed_mux_client_modes }} allowed
+  when: openshift_logging_mux_client_mode is defined and not openshift_logging_mux_client_mode in __allowed_mux_client_modes
+
+- debug:
+    msg: WARNING Use of openshift_logging_mux_client_mode=minimal is not recommended due to current scaling issues
+  when: openshift_logging_mux_client_mode is defined and openshift_logging_mux_client_mode == 'minimal'
+
 - include: determine_version.yaml
-
-- set_fact:
-    openshift_logging_fluentd_use_journal: "{{ openshift_hosted_logging_use_journal }}"
-  when:
-  - openshift_hosted_logging_use_journal is defined
-  - openshift_logging_fluentd_use_journal is not defined
-
-- set_fact:
-    openshift_logging_fluentd_use_journal: "{{ __fluentd_use_journal }}"
-  when:
-  - openshift_hosted_logging_use_journal is not defined
-  - openshift_logging_fluentd_use_journal is not defined
 
 # allow passing in a tempdir
 - name: Create temp directory for doing work in

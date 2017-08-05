@@ -24,11 +24,11 @@ openshift_logging_mux_ops_host: "{{ openshift_logging_mux_app_host }}"
 openshift_logging_mux_ops_port: "{{ openshift_logging_mux_app_port }}"
 
 ### Used by "hosted" and "secure-aggregator" deployments
-openshift_logging_mux_use_journal: "{{ openshift_hosted_logging_use_journal | default('') }}"
 openshift_logging_mux_journal_source: "{{ openshift_hosted_logging_journal_source | default('') }}"
 openshift_logging_mux_journal_read_from_head: "{{ openshift_hosted_logging_journal_read_from_head | default('') }}"
 
 openshift_logging_mux_allow_external: False
+openshift_logging_use_mux: "{{ openshift_logging_mux_allow_external | default(False) }}"
 openshift_logging_mux_hostname: "{{ 'mux.' ~ (openshift_master_default_subdomain | default('router.default.svc.cluster.local', true)) }}"
 openshift_logging_mux_port: 24284
 # the namespace to use for undefined projects should come first, followed by any
@@ -48,3 +48,20 @@ openshift_logging_mux_ops_ca: /etc/fluent/keys/ca
 #mux_config_contents:
 #mux_throttle_contents:
 #mux_secureforward_contents:
+
+# One of ['emptydir', 'pvc', 'hostmount']
+openshift_logging_mux_file_buffer_storage_type: "emptydir"
+
+# pvc options
+# the name of the PVC we will bind to -- create it if it does not exist
+openshift_logging_mux_file_buffer_pvc_name: "logging-mux-pvc"
+
+# required if the PVC does not already exist
+openshift_logging_mux_file_buffer_pvc_size: 4Gi
+openshift_logging_mux_file_buffer_pvc_dynamic: false
+openshift_logging_mux_file_buffer_pvc_pv_selector: {}
+openshift_logging_mux_file_buffer_pvc_access_modes: ['ReadWriteOnce']
+openshift_logging_mux_file_buffer_storage_group: '65534'
+
+openshift_logging_mux_file_buffer_pvc_prefix: "logging-mux"
+openshift_logging_mux_file_buffer_limit: 2Gi
