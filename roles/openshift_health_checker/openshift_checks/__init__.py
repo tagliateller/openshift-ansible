@@ -10,11 +10,34 @@ from importlib import import_module
 
 from ansible.module_utils import six
 from ansible.module_utils.six.moves import reduce  # pylint: disable=import-error,redefined-builtin
+from ansible.plugins.filter.core import to_bool as ansible_to_bool
 
 
 class OpenShiftCheckException(Exception):
-    """Raised when a check cannot proceed."""
-    pass
+    """Raised when a check encounters a failure condition."""
+
+    def __init__(self, name, msg=None):
+        # msg is for the message the user will see when this is raised.
+        # name is for test code to identify the error without looking at msg text.
+        if msg is None:  # for parameter backward compatibility
+            msg = name
+            name = self.__class__.__name__
+        self.name = name
+        super(OpenShiftCheckException, self).__init__(msg)
+
+
+class OpenShiftCheckExceptionList(OpenShiftCheckException):
+    """A container for multiple logging errors that may be detected in one check."""
+    def __init__(self, errors):
+        self.errors = errors
+        super(OpenShiftCheckExceptionList, self).__init__(
+            'OpenShiftCheckExceptionList',
+            '\n'.join(str(msg) for msg in errors)
+        )
+
+    # make iterable
+    def __getitem__(self, index):
+        return self.errors[index]
 
 
 @six.add_metaclass(ABCMeta)
@@ -34,6 +57,9 @@ class OpenShiftCheck(object):
         self._execute_module = execute_module
         self.task_vars = task_vars or {}
         self.tmp = tmp
+
+        # set to True when the check changes the host, for accurate total "changed" count
+        self.changed = False
 
     @abstractproperty
     def name(self):
@@ -94,16 +120,59 @@ class OpenShiftCheck(object):
 
         Ansible task_vars structures are Python dicts, often mapping strings to
         other dicts. This helper makes it easier to get a nested value, raising
-        OpenShiftCheckException when a key is not found or returning a default value
-        provided as a keyword argument.
+        OpenShiftCheckException when a key is not found.
+
+        Keyword args:
+          default:
+            On missing key, return this as default value instead of raising exception.
+          convert:
+            Supply a function to apply to normalize the value before returning it.
+            None is the default (return as-is).
+            This function should raise ValueError if the user has provided a value
+            that cannot be converted, or OpenShiftCheckException if some other
+            problem needs to be described to the user.
         """
+        if len(keys) == 1:
+            keys = keys[0].split(".")
+
         try:
             value = reduce(operator.getitem, keys, self.task_vars)
         except (KeyError, TypeError):
-            if "default" in kwargs:
-                return kwargs["default"]
-            raise OpenShiftCheckException("'{}' is undefined".format(".".join(map(str, keys))))
-        return value
+            if "default" not in kwargs:
+                raise OpenShiftCheckException(
+                    "This check expects the '{}' inventory variable to be defined\n"
+                    "in order to proceed, but it is undefined. There may be a bug\n"
+                    "in Ansible, the checks, or their dependencies."
+                    "".format(".".join(map(str, keys)))
+                )
+            value = kwargs["default"]
+
+        convert = kwargs.get("convert", None)
+        try:
+            if convert is None:
+                return value
+            elif convert is bool:  # interpret bool as Ansible does, instead of python truthiness
+                return ansible_to_bool(value)
+            else:
+                return convert(value)
+
+        except ValueError as error:  # user error in specifying value
+            raise OpenShiftCheckException(
+                'Cannot convert inventory variable to expected type:\n'
+                '  "{var}={value}"\n'
+                '{error}'.format(var=".".join(keys), value=value, error=error)
+            )
+
+        except OpenShiftCheckException:  # some other check-specific problem
+            raise
+
+        except Exception as error:  # probably a bug in the function
+            raise OpenShiftCheckException(
+                'There is a bug in this check. While trying to convert variable \n'
+                '  "{var}={value}"\n'
+                'the given converter cannot be used or failed unexpectedly:\n'
+                '{error}'.format(var=".".join(keys), value=value, error=error)
+            )
 
     @staticmethod
     def get_major_minor_version(openshift_image_tag):
