@@ -1,4 +1,8 @@
 ---
+- name: setup firewall
+  include: firewall.yml
+  static: yes
+
 - name: Create directory /usr/share/nuage-openshift-monitor
   become: yes
   file: path=/usr/share/nuage-openshift-monitor state=directory
@@ -45,7 +49,6 @@
   become: yes
   template: src=nuage-openshift-monitor.j2 dest=/usr/share/nuage-openshift-monitor/nuage-openshift-monitor.yaml owner=root mode=0644
   notify:
-    - restart master
     - restart master api
     - restart master controllers
     - restart nuage-openshift-monitor
