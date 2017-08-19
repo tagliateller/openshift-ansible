@@ -1,8 +1,4 @@
 ---
-- include: std_include.yml
-  tags:
-  - always
-
 # TODO: refactor this into its own include
 # and pass a variable for ctx
 - name: Verify Requirements
@@ -21,6 +17,10 @@
       - package_version
       - docker_image_availability
       - docker_storage
+
+- include: initialize_firewall.yml
+  tags:
+  - always
 
 - hosts: localhost
   tasks:
