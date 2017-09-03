@@ -10,7 +10,7 @@
 
 Name:           openshift-ansible
 Version:        3.7.0
-Release:        0.105.0%{?dist}
+Release:        0.123.0%{?dist}
 Summary:        Openshift and Atomic Enterprise Ansible
 License:        ASL 2.0
 URL:            https://github.com/openshift/openshift-ansible
@@ -280,6 +280,111 @@ Atomic OpenShift Utilities includes
 
 
 %changelog
+* Wed Aug 30 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.123.0
+- 
+
+* Wed Aug 30 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.122.0
+- Update openshift_hosted_routers example to be in ini format.
+  (abutcher@redhat.com)
+- Update calico to v2.5 (djosborne10@gmail.com)
+
+* Wed Aug 30 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.121.0
+- Revert "logging set memory request to limit" (sdodson@redhat.com)
+- Move firewall install and fix scaleup playbooks (rteague@redhat.com)
+- Fix group conditional requirements (rteague@redhat.com)
+- Updating openshift_service_catalog to use oc_service over oc_obj to resolve
+  idempotency issues being seen from rerunning role (ewolinet@redhat.com)
+- annotate the infra projects for logging to fix bz1480988
+  (jcantril@redhat.com)
+- docker_image_availability: timeout skopeo inspect (lmeyer@redhat.com)
+- Fix scaleup on containerized installations (sdodson@redhat.com)
+- bug 1480878. Default pvc for logging (jcantril@redhat.com)
+- logging set memory request to limit (jcantril@redhat.com)
+- openshift_cfme: add nfs directory support (fsimonce@redhat.com)
+
+* Tue Aug 29 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.120.0
+- Nuage changes to add custom mounts for atomic-openshift-node service
+  (rohan.s.parulekar@nuagenetworks.net)
+- Add independent registry auth support (mgugino@redhat.com)
+- roles: use openshift_use_crio (gscrivan@redhat.com)
+- cri-o: change to system runc (gscrivan@redhat.com)
+- cri-o: rename openshift_docker_use_crio to openshift_use_crio
+  (gscrivan@redhat.com)
+- Remove unsupported playbooks and utilities (rteague@redhat.com)
+- Updating default tag for enterprise installation for ASB
+  (ewolinet@redhat.com)
+- Only validate certificates that are passed to oc_route (zgalor@redhat.com)
+
+* Mon Aug 28 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.118.0
+- Fix origin metrics and logging container version
+  (gevorg15@users.noreply.github.com)
+- Removing deprecation warnings for when conditions. (kwoodson@redhat.com)
+- Default to global setting for firewall. (kwoodson@redhat.com)
+- system-containers: Fallback for system_images_registry (smilner@redhat.com)
+- inventory: Add system_images_registry example (smilner@redhat.com)
+- Remove near-meta role openshift_cli_facts (mgugino@redhat.com)
+- Update error message: s/non-unique/duplicate (rhcarvalho@gmail.com)
+- Make pylint disables more specific (rhcarvalho@gmail.com)
+- Handle exceptions in failure summary cb plugin (rhcarvalho@gmail.com)
+- Rewrite failure summary callback plugin (rhcarvalho@gmail.com)
+- Handle more exceptions when running checks (rhcarvalho@gmail.com)
+- List known checks/tags when check name is invalid (rhcarvalho@gmail.com)
+- List existing health checks when none is requested (rhcarvalho@gmail.com)
+- Add playbook for running arbitrary health checks (rhcarvalho@gmail.com)
+- Update health check README (rhcarvalho@gmail.com)
+- Standardize openshift_provisioners entry point (rteague@redhat.com)
+- Remove unused upgrade playbook (rteague@redhat.com)
+- Bug 1471322: logging roles based image versions (jwozniak@redhat.com)
+
+* Fri Aug 25 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.117.0
+- Standardize openshift-checks code paths (rteague@redhat.com)
+
+* Fri Aug 25 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.116.0
+- Add missing hostnames to registry cert (sdodson@redhat.com)
+
+* Fri Aug 25 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.115.0
+- 
+
+* Fri Aug 25 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.114.0
+- 
+
+* Fri Aug 25 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.113.0
+- openshift_version: enterprise accepts new style pre-release
+  (smilner@redhat.com)
+- Nuage changes for Atomic hosts OSE Integration
+  (rohan.s.parulekar@nuagenetworks.net)
+
+* Fri Aug 25 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.112.0
+- fix #5206.  Default ES cpu limit (jcantril@redhat.com)
+
+* Fri Aug 25 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.111.0
+- Upgrade check for OpenShift authorization objects (rteague@redhat.com)
+
+* Fri Aug 25 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.110.0
+- Setup tuned profiles in /etc/tuned (jmencak@redhat.com)
+
+* Thu Aug 24 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.109.0
+- 
+
+* Thu Aug 24 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.108.0
+- 
+
+* Thu Aug 24 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.107.0
+- 
+
+* Thu Aug 24 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.106.0
+- Add dotnet 2.0 to v3.6 (sdodson@redhat.com)
+- Add dotnet 2.0 to v3.7 (sdodson@redhat.com)
+- Update v3.6 content (sdodson@redhat.com)
+- Update all image streams and templates (sdodson@redhat.com)
+- Passing memory and cpu limit for ops ES install (ewolinet@redhat.com)
+- If IP4_NAMESERVERS are unset then pull the value from /etc/resolv.conf
+  (sdodson@redhat.com)
+- New tuned profile hierarchy. (jmencak@redhat.com)
+- GlusterFS: add minor README note for #5071 (jarrpa@redhat.com)
+- Update cfme templates to auto-generate postgresql password
+  https://bugzilla.redhat.com/show_bug.cgi?id=1461973 (simaishi@redhat.com)
+
 * Wed Aug 23 2017 Jenkins CD Merge Bot <smunilla@redhat.com> 3.7.0-0.105.0
 - Fix generated content (sdodson@redhat.com)
 - Switch to migrating one host and forming a new cluster (sdodson@redhat.com)

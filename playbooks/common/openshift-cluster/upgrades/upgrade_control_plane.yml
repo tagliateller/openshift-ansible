@@ -91,10 +91,7 @@
 
   - include_vars: ../../../../roles/openshift_master/vars/main.yml
 
-  - name: Remove any legacy systemd units
-    include: ../../../../roles/openshift_master/tasks/clean_systemd_units.yml
-
-  - name: Update systemd units
+  - name: Remove any legacy systemd units and update systemd units
     include: ../../../../roles/openshift_master/tasks/systemd_units.yml
 
   - name: Check for ca-bundle.crt
@@ -284,7 +281,7 @@
   roles:
   - openshift_facts
   tasks:
-  - include: docker/upgrade.yml
+  - include: docker/tasks/upgrade.yml
     when: l_docker_upgrade is defined and l_docker_upgrade | bool and not openshift.common.is_atomic | bool
 
 - name: Drain and upgrade master nodes
