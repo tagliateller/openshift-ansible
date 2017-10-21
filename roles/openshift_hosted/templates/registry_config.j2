@@ -53,7 +53,7 @@ storage:
 {%   if openshift_hosted_registry_storage_swift_domain is defined %}
     domain: {{ openshift_hosted_registry_storage_swift_domain }}
 {%   endif -%}
-{%   if openshift_hosted_registry_storage_swift_domainid %}
+{%   if openshift_hosted_registry_storage_swift_domainid is defined %}
     domainid: {{ openshift_hosted_registry_storage_swift_domainid }}
 {%   endif -%}
 {% elif openshift_hosted_registry_storage_provider | default('') == 'gcs' %}
@@ -63,17 +63,15 @@ storage:
     keyfile: /etc/registry/gcs.json
 {%   endif -%}
 {%   if openshift_hosted_registry_storage_gcs_rootdirectory is defined %}
-    rootdirectory: {{ openshift_hosted_registry_storage_gcs_rootdirectory }}
+    rootdirectory: {{ openshift_hosted_registry_storage_gcs_rootdirectory | default('/registry') }}
 {%   endif -%}
 {% endif -%}
 auth:
   openshift:
     realm: openshift
 middleware:
-{% if openshift.common.version_gte_3_3_or_1_3 | bool %}
   registry:
   - name: openshift
-{% endif %}
   repository:
   - name: openshift
     options:
@@ -87,7 +85,7 @@ middleware:
       baseurl: {{ openshift_hosted_registry_storage_s3_cloudfront_baseurl }}
       privatekey: /etc/origin/cloudfront.pem
       keypairid: {{ openshift_hosted_registry_storage_s3_cloudfront_keypairid }}
-{% elif openshift.common.version_gte_3_3_or_1_3 | bool %}
+{% else %}
   storage:
   - name: openshift
 {% endif -%}

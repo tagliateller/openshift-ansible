@@ -12,13 +12,13 @@ generation for Elasticsearch (it uses JKS) as well as openssl to sign certificat
 As part of the installation, it is recommended that you add the Fluentd node selector label
 to the list of persisted [node labels](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-node-host-labels).
 
-###Required vars:
+### Required vars:
 
 - `openshift_logging_install_logging`: When `True` the `openshift_logging` role will install Aggregated Logging.
 
 When `openshift_logging_install_logging` is set to `False` the `openshift_logging` role will uninstall Aggregated Logging.
 
-###Optional vars:
+### Optional vars:
 - `openshift_logging_purge_logging`: When `openshift_logging_install_logging` is set to 'False' to trigger uninstalation and `openshift_logging_purge_logging` is set to 'True', it will completely and irreversibly remove all logging persistent data including PVC. Defaults to 'False'.
 - `openshift_logging_image_prefix`: The prefix for the logging images to use. Defaults to 'docker.io/openshift/origin-'.
 - `openshift_logging_curator_image_prefix`: Setting the image prefix for Curator image. Defaults to `openshift_logging_image_prefix`.
@@ -44,25 +44,24 @@ When `openshift_logging_install_logging` is set to `False` the `openshift_loggin
 - `openshift_logging_curator_run_timezone`: The timezone that Curator uses for figuring out its run time. Defaults to 'UTC'.
 - `openshift_logging_curator_script_log_level`: The script log level for Curator. Defaults to 'INFO'.
 - `openshift_logging_curator_log_level`: The log level for the Curator process. Defaults to 'ERROR'.
-- `openshift_logging_curator_cpu_limit`: The amount of CPU to allocate to Curator. Default is '100m'.
+- `openshift_logging_curator_cpu_request`: The minimum amount of CPU to allocate to Curator. Default is '100m'.
 - `openshift_logging_curator_memory_limit`: The amount of memory to allocate to Curator. Unset if not specified.
 - `openshift_logging_curator_nodeselector`: A map of labels (e.g. {"node":"infra","region":"west"} to select the nodes where the curator pod will land.
 - `openshift_logging_image_pull_secret`: The name of an existing pull secret to link to the logging service accounts
 
 - `openshift_logging_kibana_hostname`: The Kibana hostname. Defaults to 'kibana.example.com'.
-- `openshift_logging_kibana_cpu_limit`: The amount of CPU to allocate to Kibana or unset if not specified.
+- `openshift_logging_kibana_cpu_request`: The minimum amount of CPU to allocate to Kibana or unset if not specified.
 - `openshift_logging_kibana_memory_limit`: The amount of memory to allocate to Kibana or unset if not specified.
 - `openshift_logging_kibana_proxy_debug`: When "True", set the Kibana Proxy log level to DEBUG. Defaults to 'false'.
-- `openshift_logging_kibana_proxy_cpu_limit`: The amount of CPU to allocate to Kibana proxy or unset if not specified.
+- `openshift_logging_kibana_proxy_cpu_request`: The minimum amount of CPU to allocate to Kibana proxy or unset if not specified.
 - `openshift_logging_kibana_proxy_memory_limit`: The amount of memory to allocate to Kibana proxy or unset if not specified.
 - `openshift_logging_kibana_replica_count`: The number of replicas Kibana should be scaled up to. Defaults to 1.
 - `openshift_logging_kibana_nodeselector`: A map of labels (e.g. {"node":"infra","region":"west"} to select the nodes where the pod will land.
 - `openshift_logging_kibana_edge_term_policy`: Insecure Edge Termination Policy. Defaults to Redirect.
 
 - `openshift_logging_fluentd_nodeselector`: The node selector that the Fluentd daemonset uses to determine where to deploy to. Defaults to '"logging-infra-fluentd": "true"'.
-- `openshift_logging_fluentd_cpu_limit`: The CPU limit for Fluentd pods. Defaults to '100m'.
+- `openshift_logging_fluentd_cpu_request`: The minimum amount of CPU to allocate for Fluentd collector pods. Defaults to '100m'.
 - `openshift_logging_fluentd_memory_limit`: The memory limit for Fluentd pods. Defaults to '512Mi'.
-- `openshift_logging_fluentd_es_copy`: Whether or not to use the ES_COPY feature for Fluentd (DEPRECATED). Defaults to 'False'.
 - `openshift_logging_fluentd_use_journal`: *DEPRECATED - DO NOT USE* Fluentd will automatically detect whether or not Docker is using the journald log driver.
 - `openshift_logging_fluentd_journal_read_from_head`: If empty, Fluentd will use its internal default, which is false.
 - `openshift_logging_fluentd_hosts`: List of nodes that should be labeled for Fluentd to be deployed to. Defaults to ['--all'].
@@ -70,6 +69,9 @@ When `openshift_logging_install_logging` is set to `False` the `openshift_loggin
 - `openshift_logging_fluentd_buffer_size_limit`: Buffer chunk limit for Fluentd. Defaults to 1m.
 - `openshift_logging_fluentd_file_buffer_limit`: Fluentd will set the value to the file buffer limit.  Defaults to '1Gi' per destination.
 
+- `openshift_logging_fluentd_audit_container_engine`: When `openshift_logging_fluentd_audit_container_engine` is set to `True`, the audit log of the container engine will be collected and stored in ES.
+- `openshift_logging_fluentd_audit_file`: Location of audit log file. The default is `/var/log/audit/audit.log`
+- `openshift_logging_fluentd_audit_pos_file`: Location of fluentd in_tail position file for the audit log file. The default is `/var/log/audit/audit.log.pos`
 
 - `openshift_logging_es_host`: The name of the ES service Fluentd should send logs to. Defaults to 'logging-es'.
 - `openshift_logging_es_port`: The port for the ES service Fluentd should sent its logs to. Defaults to '9200'.
@@ -78,7 +80,7 @@ When `openshift_logging_install_logging` is set to `False` the `openshift_loggin
 - `openshift_logging_es_client_key`: The location of the client key Fluentd uses for openshift_logging_es_host. Defaults to '/etc/fluent/keys/key'.
 
 - `openshift_logging_es_cluster_size`: The number of ES cluster members. Defaults to '1'.
-- `openshift_logging_es_cpu_limit`:  The amount of CPU limit for the ES cluster.  Unused if not set
+- `openshift_logging_es_cpu_request`: The minimum amount of CPU to allocate for an ES pod cluster member. Defaults to 1 CPU.
 - `openshift_logging_es_memory_limit`: The amount of RAM that should be assigned to ES. Defaults to '8Gi'.
 - `openshift_logging_es_log_appenders`: The list of rootLogger appenders for ES logs which can be: 'file', 'console'. Defaults to 'file'.
 - `openshift_logging_es_pv_selector`: A key/value map added to a PVC in order to select specific PVs.  Defaults to 'None'.
@@ -91,6 +93,12 @@ When `openshift_logging_install_logging` is set to `False` the `openshift_loggin
 - `openshift_logging_es_number_of_shards`: The number of primary shards for every new index created in ES. Defaults to '1'.
 - `openshift_logging_es_number_of_replicas`: The number of replica shards per primary shard for every new index. Defaults to '0'.
 
+- `openshift_logging_install_eventrouter`: Coupled with `openshift_logging_install_logging`. When both are 'True', eventrouter will be installed. When both are 'False', eventrouter will be uninstalled.
+Other combinations will keep the eventrouter untouched.
+
+Detailed eventrouter configuration can be found in
+- `roles/openshift_logging_eventrouter/README.md`
+
 When `openshift_logging_use_ops` is `True`, there are some additional vars. These work the
 same as above for their non-ops counterparts, but apply to the OPS cluster instance:
 - `openshift_logging_es_ops_host`: logging-es-ops
@@ -99,7 +107,7 @@ same as above for their non-ops counterparts, but apply to the OPS cluster insta
 - `openshift_logging_es_ops_client_cert`: /etc/fluent/keys/cert
 - `openshift_logging_es_ops_client_key`: /etc/fluent/keys/key
 - `openshift_logging_es_ops_cluster_size`: 1
-- `openshift_logging_es_ops_cpu_limit`:  The amount of CPU limit for the ES cluster.  Unused if not set
+- `openshift_logging_es_ops_cpu_request`: The minimum amount of CPU to allocate for an ES ops pod cluster member. Defaults to 1 CPU.
 - `openshift_logging_es_ops_memory_limit`: 8Gi
 - `openshift_logging_es_ops_pvc_dynamic`: False
 - `openshift_logging_es_ops_pvc_size`: ""
@@ -107,9 +115,9 @@ same as above for their non-ops counterparts, but apply to the OPS cluster insta
 - `openshift_logging_es_ops_recover_after_time`: 5m
 - `openshift_logging_es_ops_storage_group`: 65534
 - `openshift_logging_kibana_ops_hostname`: The Operations Kibana hostname. Defaults to 'kibana-ops.example.com'.
-- `openshift_logging_kibana_ops_cpu_limit`: The amount of CPU to allocate to Kibana or unset if not specified.
+- `openshift_logging_kibana_ops_cpu_request`: The minimum amount of CPU to allocate to Kibana or unset if not specified.
 - `openshift_logging_kibana_ops_memory_limit`: The amount of memory to allocate to Kibana or unset if not specified.
-- `openshift_logging_kibana_ops_proxy_cpu_limit`: The amount of CPU to allocate to Kibana proxy or unset if not specified.
+- `openshift_logging_kibana_ops_proxy_cpu_request`: The minimum amount of CPU to allocate to Kibana proxy or unset if not specified.
 - `openshift_logging_kibana_ops_proxy_memory_limit`: The amount of memory to allocate to Kibana proxy or unset if not specified.
 - `openshift_logging_kibana_ops_replica_count`: The number of replicas Kibana ops should be scaled up to. Defaults to 1.
 
@@ -164,11 +172,11 @@ Elasticsearch OPS too, if using an OPS cluster:
   send the raw logs to mux for processing.  We do not currently recommend using
   this mode, and ansible will warn you about this.
 - `openshift_logging_mux_hostname`: Default is "mux." +
-  `openshift_master_default_subdomain`.  This is the hostname *external*_
+  `openshift_master_default_subdomain`.  This is the hostname *external*
   clients will use to connect to mux, and will be used in the TLS server cert
   subject.
 - `openshift_logging_mux_port`: 24284
-- `openshift_logging_mux_cpu_limit`: 100m
+- `openshift_logging_mux_cpu_request`: 100m
 - `openshift_logging_mux_memory_limit`: 512Mi
 - `openshift_logging_mux_default_namespaces`: Default `["mux-undefined"]` - the
  first value in the list is the namespace to use for undefined projects,
@@ -194,3 +202,26 @@ Elasticsearch OPS too, if using an OPS cluster:
   Defaults to 'logging-mux'.
 - `openshift_logging_mux_file_buffer_storage_group`: The storage group used for Mux.
   Defaults to '65534'.
+
+### remote syslog forwarding
+- `openshift_logging_fluentd_remote_syslog`: Set `true` to enable remote syslog forwarding, defaults to `false`
+- `openshift_logging_fluentd_remote_syslog_host`: Required, hostname or IP of remote syslog server
+- `openshift_logging_fluentd_remote_syslog_port`: Port of remote syslog server, defaults to `514`
+- `openshift_logging_fluentd_remote_syslog_severity`: Syslog severity level, defaults to `debug`
+- `openshift_logging_fluentd_remote_syslog_facility`: Syslog facility, defaults to `local0`
+- `openshift_logging_fluentd_remote_syslog_remove_tag_prefix`: Remove the prefix from the tag, defaults to `''` (empty)
+- `openshift_logging_fluentd_remote_syslog_tag_key`: If string specified, use this field from the record to set the key field on the syslog message
+- `openshift_logging_fluentd_remote_syslog_use_record`: Set `true` to use the severity and facility from the record, defaults to `false`
+- `openshift_logging_fluentd_remote_syslog_payload_key`: If string is specified, use this field from the record as the payload on the syslog message
+
+The corresponding openshift\_logging\_mux\_* parameters are below.
+
+- `openshift_logging_mux_remote_syslog`: Set `true` to enable remote syslog forwarding, defaults to `false`
+- `openshift_logging_mux_remote_syslog_host`: Required, hostname or IP of remote syslog server
+- `openshift_logging_mux_remote_syslog_port`: Port of remote syslog server, defaults to `514`
+- `openshift_logging_mux_remote_syslog_severity`: Syslog severity level, defaults to `debug`
+- `openshift_logging_mux_remote_syslog_facility`: Syslog facility, defaults to `local0`
+- `openshift_logging_mux_remote_syslog_remove_tag_prefix`: Remove the prefix from the tag, defaults to `''` (empty)
+- `openshift_logging_mux_remote_syslog_tag_key`: If string specified, use this field from the record to set the key field on the syslog message
+- `openshift_logging_mux_remote_syslog_use_record`: Set `true` to use the severity and facility from the record, defaults to `false`
+- `openshift_logging_mux_remote_syslog_payload_key`: If string is specified, use this field from the record as the payload on the syslog message

@@ -20,13 +20,13 @@ class PackageAvailability(NotContainerizedMixin, OpenShiftCheck):
 
         packages = set()
 
-        if "masters" in group_names:
+        if "oo_masters_to_config" in group_names:
             packages.update(self.master_packages(rpm_prefix))
-        if "nodes" in group_names:
+        if "oo_nodes_to_config" in group_names:
             packages.update(self.node_packages(rpm_prefix))
 
         args = {"packages": sorted(set(packages))}
-        return self.execute_module("check_yum_update", args)
+        return self.execute_module_with_retries("check_yum_update", args)
 
     @staticmethod
     def master_packages(rpm_prefix):

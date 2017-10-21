@@ -90,6 +90,12 @@ options:
     required: false
     default: default
     aliases: []
+  annotations:
+    description:
+    - Annotations to apply to the object
+    required: false
+    default: None
+    aliases: []
   files:
     description:
     - A list of files provided for secrets
@@ -765,7 +771,7 @@ class Yedit(object):  # pragma: no cover
                 yamlfile.yaml_dict = content
 
             if params['key']:
-                rval = yamlfile.get(params['key']) or {}
+                rval = yamlfile.get(params['key'])
 
             return {'changed': False, 'result': rval, 'state': state}
 
@@ -1441,7 +1447,7 @@ class OpenShiftCLIConfig(object):
         for key in sorted(self.config_options.keys()):
             data = self.config_options[key]
             if data['include'] \
-               and (data['value'] or isinstance(data['value'], int)):
+               and (data['value'] is not None or isinstance(data['value'], int)):
                 if key == ascommalist:
                     val = ','.join(['{}={}'.format(kk, vv) for kk, vv in sorted(data['value'].items())])
                 else:
@@ -1464,13 +1470,15 @@ class SecretConfig(object):
                  namespace,
                  kubeconfig,
                  secrets=None,
-                 stype=None):
+                 stype=None,
+                 annotations=None):
         ''' constructor for handling secret options '''
         self.kubeconfig = kubeconfig
         self.name = sname
         self.type = stype
         self.namespace = namespace
         self.secrets = secrets
+        self.annotations = annotations
         self.data = {}
 
         self.create_dict()
@@ -1487,6 +1495,8 @@ class SecretConfig(object):
         if self.secrets:
             for key, value in self.secrets.items():
                 self.data['data'][key] = value
+        if self.annotations:
+            self.data['metadata']['annotations'] = self.annotations
 
 # pylint: disable=too-many-instance-attributes
 class Secret(Yedit):
@@ -1698,8 +1708,7 @@ class OCSecret(OpenShiftCLI):
             elif params['contents']:
                 files = Utils.create_tmp_files_from_contents(params['contents'])
             else:
-                return {'failed': True,
-                        'msg': 'Either specify files or contents.'}
+                files = [{'name': 'null', 'path': os.devnull}]
 
             ########
             # Create
@@ -1783,6 +1792,7 @@ def main():
             debug=dict(default=False, type='bool'),
             namespace=dict(default='default', type='str'),
             name=dict(default=None, type='str'),
+            annotations=dict(default=None, type='dict'),
             type=dict(default=None, type='str'),
             files=dict(default=None, type='list'),
             delete_after=dict(default=False, type='bool'),

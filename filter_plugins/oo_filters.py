@@ -707,33 +707,31 @@ def oo_openshift_env(hostvars):
         if regex.match(key):
             facts[key] = hostvars[key]
 
-    migrations = {'openshift_router_selector': 'openshift_hosted_router_selector',
-                  'openshift_registry_selector': 'openshift_hosted_registry_selector'}
-    for old_fact, new_fact in migrations.items():
-        if old_fact in facts and new_fact not in facts:
-            facts[new_fact] = facts[old_fact]
     return facts
 
 
-# pylint: disable=too-many-branches, too-many-nested-blocks, too-many-statements
-def oo_persistent_volumes(hostvars, groups, persistent_volumes=None):
+# pylint: disable=too-many-branches, too-many-nested-blocks, too-many-statements, too-many-locals
+def oo_component_persistent_volumes(hostvars, groups, component, subcomponent=None):
     """ Generate list of persistent volumes based on oo_openshift_env
-        storage options set in host variables.
+        storage options set in host variables for a specific component.
     """
     if not issubclass(type(hostvars), dict):
         raise errors.AnsibleFilterError("|failed expects hostvars is a dict")
     if not issubclass(type(groups), dict):
         raise errors.AnsibleFilterError("|failed expects groups is a dict")
-    if persistent_volumes is not None and not issubclass(type(persistent_volumes), list):
-        raise errors.AnsibleFilterError("|failed expects persistent_volumes is a list")
 
-    if persistent_volumes is None:
-        persistent_volumes = []
-    if 'hosted' in hostvars['openshift']:
-        for component in hostvars['openshift']['hosted']:
-            if 'storage' in hostvars['openshift']['hosted'][component]:
-                params = hostvars['openshift']['hosted'][component]['storage']
-                kind = params['kind']
+    persistent_volume = None
+
+    if component in hostvars['openshift']:
+        if subcomponent is not None:
+            storage_component = hostvars['openshift'][component][subcomponent]
+        else:
+            storage_component = hostvars['openshift'][component]
+
+        if 'storage' in storage_component:
+            params = storage_component['storage']
+            kind = params['kind']
+            if 'create_pv' in params:
                 create_pv = params['create_pv']
                 if kind is not None and create_pv:
                     if kind == 'nfs':
@@ -761,7 +759,7 @@ def oo_persistent_volumes(hostvars, groups, persistent_volumes=None):
                                 nfs=dict(
                                     server=host,
                                     path=path)))
-                        persistent_volumes.append(persistent_volume)
+
                     elif kind == 'openstack':
                         volume = params['volume']['name']
                         size = params['volume']['size']
@@ -781,7 +779,7 @@ def oo_persistent_volumes(hostvars, groups, persistent_volumes=None):
                                 cinder=dict(
                                     fsType=filesystem,
                                     volumeID=volume_id)))
-                        persistent_volumes.append(persistent_volume)
+
                     elif kind == 'glusterfs':
                         volume = params['volume']['name']
                         size = params['volume']['size']
@@ -803,13 +801,92 @@ def oo_persistent_volumes(hostvars, groups, persistent_volumes=None):
                                     endpoints=endpoints,
                                     path=path,
                                     readOnly=read_only)))
-                        persistent_volumes.append(persistent_volume)
+
                     elif not (kind == 'object' or kind == 'dynamic'):
                         msg = "|failed invalid storage kind '{0}' for component '{1}'".format(
                             kind,
                             component)
                         raise errors.AnsibleFilterError(msg)
+    return persistent_volume
+
+
+# pylint: disable=too-many-branches, too-many-nested-blocks, too-many-statements
+def oo_persistent_volumes(hostvars, groups, persistent_volumes=None):
+    """ Generate list of persistent volumes based on oo_openshift_env
+        storage options set in host variables.
+    """
+    if not issubclass(type(hostvars), dict):
+        raise errors.AnsibleFilterError("|failed expects hostvars is a dict")
+    if not issubclass(type(groups), dict):
+        raise errors.AnsibleFilterError("|failed expects groups is a dict")
+    if persistent_volumes is not None and not issubclass(type(persistent_volumes), list):
+        raise errors.AnsibleFilterError("|failed expects persistent_volumes is a list")
+
+    if persistent_volumes is None:
+        persistent_volumes = []
+    if 'hosted' in hostvars['openshift']:
+        for component in hostvars['openshift']['hosted']:
+            persistent_volume = oo_component_persistent_volumes(hostvars, groups, 'hosted', component)
+            if persistent_volume is not None:
+                persistent_volumes.append(persistent_volume)
+
+    if 'logging' in hostvars['openshift']:
+        persistent_volume = oo_component_persistent_volumes(hostvars, groups, 'logging')
+        if persistent_volume is not None:
+            persistent_volumes.append(persistent_volume)
+    if 'loggingops' in hostvars['openshift']:
+        persistent_volume = oo_component_persistent_volumes(hostvars, groups, 'loggingops')
+        if persistent_volume is not None:
+            persistent_volumes.append(persistent_volume)
+    if 'metrics' in hostvars['openshift']:
+        persistent_volume = oo_component_persistent_volumes(hostvars, groups, 'metrics')
+        if persistent_volume is not None:
+            persistent_volumes.append(persistent_volume)
+    if 'prometheus' in hostvars['openshift']:
+        persistent_volume = oo_component_persistent_volumes(hostvars, groups, 'prometheus')
+        if persistent_volume is not None:
+            persistent_volumes.append(persistent_volume)
+    if 'alertmanager' in hostvars['openshift']['prometheus']:
+        persistent_volume = oo_component_persistent_volumes(hostvars, groups, 'prometheus', 'alertmanager')
+        if persistent_volume is not None:
+            persistent_volumes.append(persistent_volume)
+    if 'alertbuffer' in hostvars['openshift']['prometheus']:
+        persistent_volume = oo_component_persistent_volumes(hostvars, groups, 'prometheus', 'alertbuffer')
+        if persistent_volume is not None:
+            persistent_volumes.append(persistent_volume)
     return persistent_volumes
+
+
+def oo_component_pv_claims(hostvars, component, subcomponent=None):
+    """ Generate list of persistent volume claims based on oo_openshift_env
+        storage options set in host variables for a speicific component.
+    """
+    if not issubclass(type(hostvars), dict):
+        raise errors.AnsibleFilterError("|failed expects hostvars is a dict")
+
+    if component in hostvars['openshift']:
+        if subcomponent is not None:
+            storage_component = hostvars['openshift'][component][subcomponent]
+        else:
+            storage_component = hostvars['openshift'][component]
+
+        if 'storage' in storage_component:
+            params = storage_component['storage']
+            kind = params['kind']
+            if 'create_pv' in params:
+                if 'create_pvc' in params:
+                    create_pv = params['create_pv']
+                    create_pvc = params['create_pvc']
+                    if kind not in [None, 'object'] and create_pv and create_pvc:
+                        volume = params['volume']['name']
+                        size = params['volume']['size']
+                        access_modes = params['access']['modes']
+                        persistent_volume_claim = dict(
+                            name="{0}-claim".format(volume),
+                            capacity=size,
+                            access_modes=access_modes)
+                        return persistent_volume_claim
+    return None
 
 
 def oo_persistent_volume_claims(hostvars, persistent_volume_claims=None):
@@ -825,20 +902,34 @@ def oo_persistent_volume_claims(hostvars, persistent_volume_claims=None):
         persistent_volume_claims = []
     if 'hosted' in hostvars['openshift']:
         for component in hostvars['openshift']['hosted']:
-            if 'storage' in hostvars['openshift']['hosted'][component]:
-                params = hostvars['openshift']['hosted'][component]['storage']
-                kind = params['kind']
-                create_pv = params['create_pv']
-                create_pvc = params['create_pvc']
-                if kind not in [None, 'object'] and create_pv and create_pvc:
-                    volume = params['volume']['name']
-                    size = params['volume']['size']
-                    access_modes = params['access']['modes']
-                    persistent_volume_claim = dict(
-                        name="{0}-claim".format(volume),
-                        capacity=size,
-                        access_modes=access_modes)
-                    persistent_volume_claims.append(persistent_volume_claim)
+            persistent_volume_claim = oo_component_pv_claims(hostvars, 'hosted', component)
+            if persistent_volume_claim is not None:
+                persistent_volume_claims.append(persistent_volume_claim)
+
+    if 'logging' in hostvars['openshift']:
+        persistent_volume_claim = oo_component_pv_claims(hostvars, 'logging')
+        if persistent_volume_claim is not None:
+            persistent_volume_claims.append(persistent_volume_claim)
+    if 'loggingops' in hostvars['openshift']:
+        persistent_volume_claim = oo_component_pv_claims(hostvars, 'loggingops')
+        if persistent_volume_claim is not None:
+            persistent_volume_claims.append(persistent_volume_claim)
+    if 'metrics' in hostvars['openshift']:
+        persistent_volume_claim = oo_component_pv_claims(hostvars, 'metrics')
+        if persistent_volume_claim is not None:
+            persistent_volume_claims.append(persistent_volume_claim)
+    if 'prometheus' in hostvars['openshift']:
+        persistent_volume_claim = oo_component_pv_claims(hostvars, 'prometheus')
+        if persistent_volume_claim is not None:
+            persistent_volume_claims.append(persistent_volume_claim)
+    if 'alertmanager' in hostvars['openshift']['prometheus']:
+        persistent_volume_claim = oo_component_pv_claims(hostvars, 'prometheus', 'alertmanager')
+        if persistent_volume_claim is not None:
+            persistent_volume_claims.append(persistent_volume_claim)
+    if 'alertbuffer' in hostvars['openshift']['prometheus']:
+        persistent_volume_claim = oo_component_pv_claims(hostvars, 'prometheus', 'alertbuffer')
+        if persistent_volume_claim is not None:
+            persistent_volume_claims.append(persistent_volume_claim)
     return persistent_volume_claims
 
 
@@ -877,10 +968,8 @@ def oo_pods_match_component(pods, deployment_type, component):
         raise errors.AnsibleFilterError("failed expects component to be a string")
 
     image_prefix = 'openshift/origin-'
-    if deployment_type in ['enterprise', 'online', 'openshift-enterprise']:
+    if deployment_type == 'openshift-enterprise':
         image_prefix = 'openshift3/ose-'
-    elif deployment_type == 'atomic-enterprise':
-        image_prefix = 'aep3_beta/aep-'
 
     matching_pods = []
     image_regex = image_prefix + component + r'.*'
@@ -1024,6 +1113,18 @@ def oo_contains_rule(source, apiGroups, resources, verbs):
     return False
 
 
+def oo_selector_to_string_list(user_dict):
+    """Convert a dict of selectors to a key=value list of strings
+
+Given input of {'region': 'infra', 'zone': 'primary'} returns a list
+of items as ['region=infra', 'zone=primary']
+    """
+    selectors = []
+    for key in user_dict:
+        selectors.append("{}={}".format(key, user_dict[key]))
+    return selectors
+
+
 class FilterModule(object):
     """ Custom ansible filter mapping """
 
@@ -1065,5 +1166,6 @@ class FilterModule(object):
             "oo_openshift_loadbalancer_backends": oo_openshift_loadbalancer_backends,
             "to_padded_yaml": to_padded_yaml,
             "oo_random_word": oo_random_word,
-            "oo_contains_rule": oo_contains_rule
+            "oo_contains_rule": oo_contains_rule,
+            "oo_selector_to_string_list": oo_selector_to_string_list
         }

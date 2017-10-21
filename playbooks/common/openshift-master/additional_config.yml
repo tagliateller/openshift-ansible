@@ -1,4 +1,14 @@
 ---
+- name: Master Additional Install Checkpoint Start
+  hosts: oo_all_hosts
+  gather_facts: false
+  tasks:
+  - name: Set Master Additional install 'In Progress'
+    set_stats:
+      data:
+        installer_phase_master_additional: "In Progress"
+      aggregate: false
+
 - name: Additional master configuration
   hosts: oo_first_master
   vars:
@@ -10,14 +20,27 @@
   - role: openshift_master_cluster
     when: openshift_master_ha | bool and openshift.master.cluster_method == "pacemaker"
   - role: openshift_examples
+    when: openshift_install_examples | default(true, true) | bool
     registry_url: "{{ openshift.master.registry_url }}"
-    when: openshift.common.install_examples | bool
   - role: openshift_hosted_templates
     registry_url: "{{ openshift.master.registry_url }}"
   - role: openshift_manageiq
-    when: openshift.common.use_manageiq | bool
+    when: openshift_use_manageiq | default(true) | bool
   - role: cockpit
-    when: not openshift.common.is_atomic and ( deployment_type in ['atomic-enterprise','openshift-enterprise'] ) and
-      (osm_use_cockpit | bool or osm_use_cockpit is undefined ) and ( openshift.common.deployment_subtype != 'registry' )
+    when:
+    - openshift.common.is_atomic
+    - deployment_type == 'openshift-enterprise'
+    - osm_use_cockpit is undefined or osm_use_cockpit | bool
+    - openshift.common.deployment_subtype != 'registry'
   - role: flannel_register
-    when: openshift.common.use_flannel | bool
+    when: openshift_use_flannel | default(false) | bool
+
+- name: Master Additional Install Checkpoint End
+  hosts: oo_all_hosts
+  gather_facts: false
+  tasks:
+  - name: Set Master Additional install 'Complete'
+    set_stats:
+      data:
+        installer_phase_master_additional: "Complete"
+      aggregate: false

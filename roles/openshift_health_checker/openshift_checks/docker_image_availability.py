@@ -1,5 +1,7 @@
 """Check that required Docker images are available."""
 
+from pipes import quote
+from ansible.module_utils import six
 from openshift_checks import OpenShiftCheck
 from openshift_checks.mixins import DockerHostMixin
 
@@ -32,6 +34,41 @@ class DockerImageAvailability(DockerHostMixin, OpenShiftCheck):
     # we use python-docker-py to check local docker for images, and skopeo
     # to look for images available remotely without waiting to pull them.
     dependencies = ["python-docker-py", "skopeo"]
+    # command for checking if remote registries have an image, without docker pull
+    skopeo_command = "timeout 10 skopeo inspect --tls-verify={tls} {creds} docker://{registry}/{image}"
+    skopeo_example_command = "skopeo inspect [--tls-verify=false] [--creds=<user>:<pass>] docker://<registry>/<image>"
+
+    def __init__(self, *args, **kwargs):
+        super(DockerImageAvailability, self).__init__(*args, **kwargs)
+
+        self.registries = dict(
+            # set of registries that need to be checked insecurely (note: not accounting for CIDR entries)
+            insecure=set(self.ensure_list("openshift_docker_insecure_registries")),
+            # set of registries that should never be queried even if given in the image
+            blocked=set(self.ensure_list("openshift_docker_blocked_registries")),
+        )
+
+        # ordered list of registries (according to inventory vars) that docker will try for unscoped images
+        regs = self.ensure_list("openshift_docker_additional_registries")
+        # currently one of these registries is added whether the user wants it or not.
+        deployment_type = self.get_var("openshift_deployment_type")
+        if deployment_type == "origin" and "docker.io" not in regs:
+            regs.append("docker.io")
+        elif deployment_type == 'openshift-enterprise' and "registry.access.redhat.com" not in regs:
+            regs.append("registry.access.redhat.com")
+        self.registries["configured"] = regs
+
+        # for the oreg_url registry there may be credentials specified
+        components = self.get_var("oreg_url", default="").split('/')
+        self.registries["oreg"] = "" if len(components) < 3 else components[0]
+        self.skopeo_command_creds = ""
+        oreg_auth_user = self.get_var('oreg_auth_user', default='')
+        oreg_auth_password = self.get_var('oreg_auth_password', default='')
+        if oreg_auth_user != '' and oreg_auth_password != '':
+            self.skopeo_command_creds = "--creds={}:{}".format(quote(oreg_auth_user), quote(oreg_auth_password))
+
+        # record whether we could reach a registry or not (and remember results)
+        self.reachable_registries = {}
 
     def is_active(self):
         """Skip hosts with unsupported deployment types."""
@@ -55,21 +92,28 @@ class DockerImageAvailability(DockerHostMixin, OpenShiftCheck):
         if not missing_images:
             return {}
 
-        registries = self.known_docker_registries()
-        if not registries:
-            return {"failed": True, "msg": "Unable to retrieve any docker registries."}
-
-        available_images = self.available_images(missing_images, registries)
+        available_images = self.available_images(missing_images)
         unavailable_images = set(missing_images) - set(available_images)
 
         if unavailable_images:
-            return {
-                "failed": True,
-                "msg": (
-                    "One or more required Docker images are not available:\n    {}\n"
-                    "Configured registries: {}"
-                ).format(",\n    ".join(sorted(unavailable_images)), ", ".join(registries)),
-            }
+            unreachable = [reg for reg, reachable in self.reachable_registries.items() if not reachable]
+            unreachable_msg = "Failed connecting to: {}\n".format(", ".join(unreachable))
+            blocked_msg = "Blocked registries: {}\n".format(", ".join(self.registries["blocked"]))
+            msg = (
+                "One or more required container images are not available:\n    {missing}\n"
+                "Checked with: {cmd}\n"
+                "Default registries searched: {registries}\n"
+                "{blocked}"
+                "{unreachable}"
+            ).format(
+                missing=",\n    ".join(sorted(unavailable_images)),
+                cmd=self.skopeo_example_command,
+                registries=", ".join(self.registries["configured"]),
+                blocked=blocked_msg if self.registries["blocked"] else "",
+                unreachable=unreachable_msg if unreachable else "",
+            )
+
+            return dict(failed=True, msg=msg)
 
         return {}
 
@@ -95,13 +139,11 @@ class DockerImageAvailability(DockerHostMixin, OpenShiftCheck):
         # containerized etcd may not have openshift_image_tag, see bz 1466622
         image_tag = self.get_var("openshift_image_tag", default="latest")
         image_info = DEPLOYMENT_IMAGE_INFO[deployment_type]
-        if not image_info:
-            return required
 
         # template for images that run on top of OpenShift
         image_url = "{}/{}-{}:{}".format(image_info["namespace"], image_info["name"], "${component}", "${version}")
         image_url = self.get_var("oreg_url", default="") or image_url
-        if 'nodes' in host_groups:
+        if 'oo_nodes_to_config' in host_groups:
             for suffix in NODE_IMAGE_SUFFIXES:
                 required.add(image_url.replace("${component}", suffix).replace("${version}", image_tag))
             # The registry-console is for some reason not prefixed with ose- like the other components.
@@ -112,68 +154,87 @@ class DockerImageAvailability(DockerHostMixin, OpenShiftCheck):
         # images for containerized components
         if self.get_var("openshift", "common", "is_containerized"):
             components = set()
-            if 'nodes' in host_groups:
+            if 'oo_nodes_to_config' in host_groups:
                 components.update(["node", "openvswitch"])
-            if 'masters' in host_groups:  # name is "origin" or "ose"
+            if 'oo_masters_to_config' in host_groups:  # name is "origin" or "ose"
                 components.add(image_info["name"])
             for component in components:
                 required.add("{}/{}:{}".format(image_info["namespace"], component, image_tag))
-            if 'etcd' in host_groups:  # special case, note it is the same for origin/enterprise
+            if 'oo_etcd_to_config' in host_groups:  # special case, note it is the same for origin/enterprise
                 required.add("registry.access.redhat.com/rhel7/etcd")  # and no image tag
 
         return required
 
     def local_images(self, images):
         """Filter a list of images and return those available locally."""
-        return [
-            image for image in images
-            if self.is_image_local(image)
-        ]
+        found_images = []
+        for image in images:
+            # docker could have the image name as-is or prefixed with any registry
+            imglist = [image] + [reg + "/" + image for reg in self.registries["configured"]]
+            if self.is_image_local(imglist):
+                found_images.append(image)
+        return found_images
 
     def is_image_local(self, image):
         """Check if image is already in local docker index."""
         result = self.execute_module("docker_image_facts", {"name": image})
-        if result.get("failed", False):
-            return False
+        return bool(result.get("images")) and not result.get("failed")
 
-        return bool(result.get("images", []))
+    def ensure_list(self, registry_param):
+        """Return the task var as a list."""
+        # https://bugzilla.redhat.com/show_bug.cgi?id=1497274
+        # If the result was a string type, place it into a list. We must do this
+        # as using list() on a string will split the string into its characters.
+        # Otherwise cast to a list as was done previously.
+        registry = self.get_var(registry_param, default=[])
+        if not isinstance(registry, six.string_types):
+            return list(registry)
+        return self.normalize(registry)
 
-    def known_docker_registries(self):
-        """Build a list of docker registries available according to inventory vars."""
-        docker_facts = self.get_var("openshift", "docker")
-        regs = set(docker_facts["additional_registries"])
-
-        deployment_type = self.get_var("openshift_deployment_type")
-        if deployment_type == "origin":
-            regs.update(["docker.io"])
-        elif "enterprise" in deployment_type:
-            regs.update(["registry.access.redhat.com"])
-
-        return list(regs)
-
-    def available_images(self, images, default_registries):
+    def available_images(self, images):
         """Search remotely for images. Returns: list of images found."""
         return [
             image for image in images
-            if self.is_available_skopeo_image(image, default_registries)
+            if self.is_available_skopeo_image(image)
         ]
 
-    def is_available_skopeo_image(self, image, default_registries):
+    def is_available_skopeo_image(self, image):
         """Use Skopeo to determine if required image exists in known registry(s)."""
-        registries = default_registries
-
-        # if image already includes a registry, only use that
+        registries = self.registries["configured"]
+        # If image already includes a registry, only use that.
+        # NOTE: This logic would incorrectly identify images that do not use a namespace, e.g.
+        # registry.access.redhat.com/rhel7 as if the registry were a namespace.
+        # It's not clear that there's any way to distinguish them, but fortunately
+        # the current set of images all look like [registry/]namespace/name[:version].
         if image.count("/") > 1:
             registry, image = image.split("/", 1)
             registries = [registry]
 
         for registry in registries:
-            args = {
-                "_raw_params": "timeout 10 skopeo inspect --tls-verify=false "
-                               "docker://{}/{}".format(registry, image)
-            }
-            result = self.execute_module("command", args)
+            if registry in self.registries["blocked"]:
+                continue  # blocked will never be consulted
+            if registry not in self.reachable_registries:
+                self.reachable_registries[registry] = self.connect_to_registry(registry)
+            if not self.reachable_registries[registry]:
+                continue  # do not keep trying unreachable registries
+
+            args = dict(registry=registry, image=image)
+            args["tls"] = "false" if registry in self.registries["insecure"] else "true"
+            args["creds"] = self.skopeo_command_creds if registry == self.registries["oreg"] else ""
+
+            result = self.execute_module_with_retries("command", {"_raw_params": self.skopeo_command.format(**args)})
             if result.get("rc", 0) == 0 and not result.get("failed"):
                 return True
+            if result.get("rc") == 124:  # RC 124 == timed out; mark unreachable
+                self.reachable_registries[registry] = False
 
         return False
+
+    def connect_to_registry(self, registry):
+        """Use ansible wait_for module to test connectivity from host to registry. Returns bool."""
+        # test a simple TCP connection
+        host, _, port = registry.partition(":")
+        port = port or 443
+        args = dict(host=host, port=port, state="started", timeout=30)
+        result = self.execute_module("wait_for", args)
+        return result.get("rc", 0) == 0 and not result.get("failed")

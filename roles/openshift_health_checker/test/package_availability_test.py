@@ -26,7 +26,7 @@ def test_is_active(pkg_mgr, is_containerized, is_active):
     (
         dict(
             openshift=dict(common=dict(service_type='origin')),
-            group_names=['masters'],
+            group_names=['oo_masters_to_config'],
         ),
         set(['origin-master']),
         set(['origin-node']),
@@ -34,7 +34,7 @@ def test_is_active(pkg_mgr, is_containerized, is_active):
     (
         dict(
             openshift=dict(common=dict(service_type='atomic-openshift')),
-            group_names=['nodes'],
+            group_names=['oo_nodes_to_config'],
         ),
         set(['atomic-openshift-node']),
         set(['atomic-openshift-master']),
@@ -42,21 +42,21 @@ def test_is_active(pkg_mgr, is_containerized, is_active):
     (
         dict(
             openshift=dict(common=dict(service_type='atomic-openshift')),
-            group_names=['masters', 'nodes'],
+            group_names=['oo_masters_to_config', 'oo_nodes_to_config'],
         ),
         set(['atomic-openshift-master', 'atomic-openshift-node']),
         set(),
     ),
 ])
 def test_package_availability(task_vars, must_have_packages, must_not_have_packages):
-    return_value = object()
+    return_value = {}
 
     def execute_module(module_name=None, module_args=None, *_):
         assert module_name == 'check_yum_update'
         assert 'packages' in module_args
         assert set(module_args['packages']).issuperset(must_have_packages)
         assert not set(module_args['packages']).intersection(must_not_have_packages)
-        return return_value
+        return {'foo': return_value}
 
     result = PackageAvailability(execute_module, task_vars).run()
-    assert result is return_value
+    assert result['foo'] is return_value

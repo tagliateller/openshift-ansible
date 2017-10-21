@@ -17,6 +17,22 @@ def es_storage(os_logging_facts, dc_name, pvc_claim, root='elasticsearch'):
     return dict(kind='emptydir')
 
 
+def walk(source, path, default, delimiter='.'):
+    '''Walk the sourch hash given the path and return the value or default if not found'''
+    if not isinstance(source, dict):
+        raise RuntimeError('The source is not a walkable dict: {} path: {}'.format(source, path))
+    keys = path.split(delimiter)
+    max_depth = len(keys)
+    cur_depth = 0
+    while cur_depth < max_depth:
+        if keys[cur_depth] in source:
+            source = source[keys[cur_depth]]
+            cur_depth = cur_depth + 1
+        else:
+            return default
+    return source
+
+
 def random_word(source_alpha, length):
     ''' Returns a random word given the source of characters to pick from and resulting length '''
     return ''.join(random.choice(source_alpha) for i in range(length))
@@ -45,6 +61,21 @@ def map_from_pairs(source, delim="="):
     return dict(item.split(delim) for item in source.split(","))
 
 
+def serviceaccount_name(qualified_sa):
+    ''' Returns the simple name from a fully qualified name '''
+    return qualified_sa.split(":")[-1]
+
+
+def serviceaccount_namespace(qualified_sa, default=None):
+    ''' Returns the namespace from a fully qualified name '''
+    seg = qualified_sa.split(":")
+    if len(seg) > 1:
+        return seg[-2]
+    if default:
+        return default
+    return seg[-1]
+
+
 # pylint: disable=too-few-public-methods
 class FilterModule(object):
     ''' OpenShift Logging Filters '''
@@ -56,5 +87,8 @@ class FilterModule(object):
             'random_word': random_word,
             'entry_from_named_pair': entry_from_named_pair,
             'map_from_pairs': map_from_pairs,
-            'es_storage': es_storage
+            'es_storage': es_storage,
+            'serviceaccount_name': serviceaccount_name,
+            'serviceaccount_namespace': serviceaccount_namespace,
+            'walk': walk
         }
