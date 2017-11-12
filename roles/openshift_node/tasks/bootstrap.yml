@@ -3,7 +3,7 @@
   package:
     name: "{{ item }}"
     state: present
-  with_items: "{{ openshift_node_ami_prep_packages }}"
+  with_items: "{{ r_openshift_node_image_prep_packages }}"
 
 - name: create the directory for node
   file:
@@ -25,11 +25,11 @@
     state: "{{ item.state | default('present') }}"
   with_items:
   # add the kubeconfig
-  - line: "KUBECONFIG=/etc/origin/node/csr_kubeconfig"
+  - line: "KUBECONFIG={{ openshift_node_config_dir }}/bootstrap.kubeconfig"
     regexp: "^KUBECONFIG=.*"
   # remove the config file.  This comes from openshift_facts
-  - regexp: "^CONFIG_FILE=.*"
-    state: absent
+  - line: "CONFIG_FILE={{ openshift_node_config_dir }}/node-config.yaml"
+    regexp: "^CONFIG_FILE=.*"
 
 - name: include aws sysconfig credentials
   include: aws.yml
@@ -76,7 +76,7 @@
     state: link
     force: yes
   with_items:
-  - /var/lib/origin/openshift.local.config/node/node-client-ca.crt
+  - "{{ openshift_node_config_dir }}/node-client-ca.crt"
 
 - when: rpmgenerated_config.stat.exists
   block:

@@ -22,25 +22,17 @@
     ansible_service_broker_registry_user: "{{ ansible_service_broker_registry_user | default(__ansible_service_broker_registry_user) }}"
     ansible_service_broker_registry_password: "{{ ansible_service_broker_registry_password | default(__ansible_service_broker_registry_password) }}"
     ansible_service_broker_registry_organization: "{{ ansible_service_broker_registry_organization | default(__ansible_service_broker_registry_organization) }}"
-
-    ansible_service_broker_certs_dir: "{{ openshift.common.config_base }}/service-catalog"
+    ansible_service_broker_registry_tag: "{{ ansible_service_broker_registry_tag | default(__ansible_service_broker_registry_tag) }}"
+    ansible_service_broker_registry_whitelist: "{{ ansible_service_broker_registry_whitelist | default(__ansible_service_broker_registry_whitelist) }}"
 
 - name: set ansible-service-broker image facts using set prefix and tag
   set_fact:
     ansible_service_broker_image: "{{ ansible_service_broker_image_prefix }}ansible-service-broker:{{ ansible_service_broker_image_tag }}"
     ansible_service_broker_etcd_image: "{{ ansible_service_broker_etcd_image_prefix }}etcd:{{ ansible_service_broker_etcd_image_tag }}"
 
-- set_fact:
-    openshift_master_config_dir: "{{ openshift.common.config_base }}/master"
-  when: openshift_master_config_dir is undefined
-
-- slurp:
-    src: "{{ openshift_master_config_dir }}/service-signer.crt"
-  register: catalog_ca
-
-
 - include: validate_facts.yml
 
+- include: generate_certs.yml
 
 # Deployment of ansible-service-broker starts here
 - name: create openshift-ansible-service-broker project
@@ -77,19 +69,21 @@
       - apiGroups: ["authentication.k8s.io"]
         resources: ["tokenreviews"]
         verbs: ["create"]
+      - apiGroups: ["image.openshift.io", ""]
+        resources: ["images"]
+        verbs: ["get", "list"]
 
 - name: Create asb-access cluster role
   oc_clusterrole:
     state: present
     name: asb-access
     rules:
-      - nonResourceURLs: ["/ansible-service-broker", "ansible-service-broker/*"]
+      - nonResourceURLs: ["/ansible-service-broker", "/ansible-service-broker/*"]
         verbs: ["get", "post", "put", "patch", "delete"]
 
 - name: Bind admin cluster-role to asb serviceaccount
   oc_adm_policy_user:
     state: present
-    namespace: openshift-ansible-service-broker
     resource_kind: cluster-role
     resource_name: admin
     user: "system:serviceaccount:openshift-ansible-service-broker:asb"
@@ -97,7 +91,6 @@
 - name: Bind auth cluster role to asb service account
   oc_adm_policy_user:
     state: present
-    namespace: openshift-ansible-service-broker
     resource_kind: cluster-role
     resource_name: asb-auth
     user: "system:serviceaccount:openshift-ansible-service-broker:asb"
@@ -105,7 +98,6 @@
 - name: Bind asb-access role to asb-client service account
   oc_adm_policy_user:
     state: present
-    namespace: openshift-ansible-service-broker
     resource_kind: cluster-role
     resource_name: asb-access
     user: "system:serviceaccount:openshift-ansible-service-broker:asb-client"
@@ -113,6 +105,7 @@
 - name: create asb-client token secret
   oc_obj:
     name: asb-client
+    namespace: openshift-ansible-service-broker
     state: present
     kind: Secret
     content:
@@ -122,9 +115,37 @@
         kind: Secret
         metadata:
           name: asb-client
+          namespace: openshift-ansible-service-broker
           annotations:
             kubernetes.io/service-account.name: asb-client
         type: kubernetes.io/service-account-token
+
+- name: Create etcd-auth secret
+  oc_secret:
+    name: etcd-auth-secret
+    namespace: openshift-ansible-service-broker
+    contents:
+      - path: ca.crt
+        data: '{{ etcd_ca_cert }}'
+
+- name: Create broker-etcd-auth secret
+  oc_secret:
+    name: broker-etcd-auth-secret
+    namespace: openshift-ansible-service-broker
+    contents:
+      - path: client.crt
+        data: '{{ etcd_client_cert }}'
+      - path: client.key
+        data: '{{ etcd_client_key }}'
+
+- oc_secret:
+    state: list
+    namespace: openshift-ansible-service-broker
+    name: asb-client
+  register: asb_client_secret
+
+- set_fact:
+    service_ca_crt: "{{ asb_client_secret.results.results.0.data['service-ca.crt'] }}"
 
 # Using oc_obj because oc_service doesn't seem to allow annotations
 # TODO: Extend oc_service to allow annotations
@@ -141,6 +162,7 @@
         kind: Service
         metadata:
           name: asb
+          namespace: openshift-ansible-service-broker
           labels:
             app: openshift-ansible-service-broker
             service: asb
@@ -155,6 +177,34 @@
           selector:
             app: openshift-ansible-service-broker
             service: asb
+
+- name: create asb-etcd service
+  oc_obj:
+    name: asb-etcd
+    namespace: openshift-ansible-service-broker
+    state: present
+    kind: Service
+    content:
+      path: /tmp/asbetcdsvcout
+      data:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: asb-etcd
+          labels:
+            app: etcd
+            service: asb-etcd
+          annotations:
+            service.alpha.openshift.io/serving-cert-secret-name: etcd-tls
+        spec:
+          ports:
+            - name: port-2379
+              port: 2379
+              targetPort: 2379
+              protocol: TCP
+          selector:
+            app: etcd
+            service: asb-etcd
 
 - name: create route for ansible-service-broker service
   oc_route:
@@ -227,6 +277,8 @@
                       mountPath: /etc/ansible-service-broker
                     - name: asb-tls
                       mountPath: /etc/tls/private
+                    - name: asb-etcd-auth
+                      mountPath: /var/run/asb-etcd-auth
                   ports:
                     - containerPort: 1338
                       protocol: TCP
@@ -249,30 +301,7 @@
                       scheme: HTTPS
                     initialDelaySeconds: 15
                     timeoutSeconds: 1
-
-                - image: "{{ ansible_service_broker_etcd_image }}"
-                  name: etcd
-                  imagePullPolicy: IfNotPresent
-                  terminationMessagePath: /tmp/termination-log
-                  workingDir: /etcd
-                  args:
-                    - "{{ ansible_service_broker_etcd_image_etcd_path }}"
-                    - "--data-dir=/data"
-                    - "--listen-client-urls=http://0.0.0.0:2379"
-                    - "--advertise-client-urls=http://0.0.0.0:2379"
-                  ports:
-                    - containerPort: 2379
-                      protocol: TCP
-                  env:
-                    - name: ETCDCTL_API
-                      value: "3"
-                  volumeMounts:
-                    - mountPath: /data
-                      name: etcd
               volumes:
-                - name: etcd
-                  persistentVolumeClaim:
-                    claimName: etcd
                 - name: config-volume
                   configMap:
                     name: broker-config
@@ -282,6 +311,77 @@
                 - name: asb-tls
                   secret:
                     secretName: asb-tls
+                - name: asb-etcd-auth
+                  secret:
+                    secretName: broker-etcd-auth-secret
+
+- name: Create asb-etcd deployment config
+  oc_obj:
+    name: etcd
+    namespace: openshift-ansible-service-broker
+    state: present
+    kind: DeploymentConfig
+    content:
+      path: /tmp/dcout
+      data:
+        apiVersion: v1
+        kind: DeploymentConfig
+        metadata:
+          name: asb-etcd
+          labels:
+            app: etcd
+            service: asb-etcd
+        spec:
+          replicas: 1
+          selector:
+            app: etcd
+          strategy:
+            type: Rolling
+          template:
+            metadata:
+              labels:
+                app: etcd
+                service: asb-etcd
+            spec:
+              serviceAccount: asb
+              containers:
+                - image: "{{ ansible_service_broker_etcd_image }}"
+                  name: etcd
+                  imagePullPolicy: IfNotPresent
+                  terminationMessagePath: /tmp/termination-log
+                  workingDir: /etcd
+                  args:
+                    - "{{ ansible_service_broker_etcd_image_etcd_path }}"
+                    - "--data-dir=/data"
+                    - "--listen-client-urls=https://0.0.0.0:2379"
+                    - "--advertise-client-urls=https://0.0.0.0:2379"
+                    - "--client-cert-auth"
+                    - "--trusted-ca-file=/var/run/etcd-auth-secret/ca.crt"
+                    - "--cert-file=/etc/tls/private/tls.crt"
+                    - "--key-file=/etc/tls/private/tls.key"
+                  ports:
+                    - containerPort: 2379
+                      protocol: TCP
+                  env:
+                    - name: ETCDCTL_API
+                      value: "3"
+                  volumeMounts:
+                    - name: etcd
+                      mountPath: /data
+                    - name: etcd-tls
+                      mountPath: /etc/tls/private
+                    - name: etcd-auth
+                      mountPath: /var/run/etcd-auth-secret
+              volumes:
+                - name: etcd
+                  persistentVolumeClaim:
+                    claimName: etcd
+                - name: etcd-tls
+                  secret:
+                    secretName: etcd-tls
+                - name: etcd-auth
+                  secret:
+                    secretName: etcd-auth-secret
 
 
 # TODO: saw a oc_configmap in the library, but didn't understand how to get it to do the following:
@@ -307,16 +407,20 @@
               - type: {{ ansible_service_broker_registry_type }}
                 name: {{ ansible_service_broker_registry_name }}
                 url:  {{ ansible_service_broker_registry_url }}
-                user: {{ ansible_service_broker_registry_user }}
-                pass: {{ ansible_service_broker_registry_password }}
                 org:  {{ ansible_service_broker_registry_organization }}
                 tag:  {{ ansible_service_broker_registry_tag }}
-                white_list: {{ ansible_service_broker_registry_whitelist }}
+                white_list: {{  ansible_service_broker_registry_whitelist | to_yaml }}
+              - type: local_openshift
+                name: localregistry
+                namespaces: ['openshift']
+                white_list: {{ ansible_service_broker_local_registry_whitelist | to_yaml }}
             dao:
-              etcd_host: 0.0.0.0
+              etcd_host: asb-etcd.openshift-ansible-service-broker.svc
               etcd_port: 2379
+              etcd_ca_file: /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+              etcd_client_cert: /var/run/asb-etcd-auth/client.crt
+              etcd_client_key: /var/run/asb-etcd-auth/client.key
             log:
-              logfile: /var/log/ansible-service-broker/asb.log
               stdout: true
               level: {{ ansible_service_broker_log_level }}
               color: true
@@ -326,6 +430,8 @@
               bearer_token_file: ""
               sandbox_role: {{ ansible_service_broker_sandbox_role }}
               image_pull_policy: {{ ansible_service_broker_image_pull_policy }}
+              keep_namespace: {{ ansible_service_broker_keep_namespace | bool | lower }}
+              keep_namespace_on_error: {{ ansible_service_broker_keep_namespace_on_error | bool | lower }}
             broker:
               dev_broker: {{ ansible_service_broker_dev_broker | bool | lower }}
               bootstrap_on_startup: {{ ansible_service_broker_bootstrap_on_startup | bool | lower }}
@@ -340,6 +446,15 @@
                 - type: basic
                   enabled: false
 
+- oc_secret:
+    name: asb-registry-auth
+    namespace: openshift-ansible-service-broker
+    state: present
+    contents:
+      - path: username
+        data: "{{ ansible_service_broker_registry_user }}"
+      - path: password
+        data: "{{ ansible_service_broker_registry_password }}"
 
 - name: Create the Broker resource in the catalog
   oc_obj:
@@ -354,11 +469,11 @@
         metadata:
           name: ansible-service-broker
         spec:
-          url: http://asb.openshift-ansible-service-broker.svc:1338/ansible-service-broker
+          url: https://asb.openshift-ansible-service-broker.svc:1338/ansible-service-broker
           authInfo:
             bearer:
               secretRef:
                 name: asb-client
                 namespace: openshift-ansible-service-broker
                 kind: Secret
-          caBundle: "{{ catalog_ca.content }}"
+          caBundle: "{{ service_ca_crt }}"

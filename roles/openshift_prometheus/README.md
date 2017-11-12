@@ -17,16 +17,16 @@ For default values, see [`defaults/main.yaml`](defaults/main.yaml).
 - `openshift_prometheus_namespace`: project (i.e. namespace) where the components will be
   deployed.
 
-- `openshift_prometheus_replicas`: The number of replicas for prometheus deployment.
-
 - `openshift_prometheus_node_selector`: Selector for the nodes prometheus will be deployed on.
 
-- `openshift_prometheus_image_<COMPONENT>`: specify image for the component 
+- `openshift_prometheus_<COMPONENT>_image_prefix`: specify image prefix for the component 
 
-## Storage related variables
-Each prometheus component (prometheus, alertmanager, alert-buffer, oauth-proxy) can set pv claim by setting corresponding role variable:
+- `openshift_prometheus_<COMPONENT>_image_version`: specify image version for the component 
+
+## PVC related variables
+Each prometheus component (prometheus, alertmanager, alertbuffer) can set pv claim by setting corresponding role variable:
 ```
-openshift_prometheus_<COMPONENT>_storage_type: <VALUE>
+openshift_prometheus_<COMPONENT>_storage_type: <VALUE> (pvc, emptydir)
 openshift_prometheus_<COMPONENT>_pvc_(name|size|access_modes|pv_selector): <VALUE>
 ```
 e.g
@@ -36,6 +36,29 @@ openshift_prometheus_alertmanager_pvc_name: alertmanager
 openshift_prometheus_alertbuffer_pvc_size: 10G
 openshift_prometheus_pvc_access_modes: [ReadWriteOnce]
 ```
+
+## NFS PV Storage variables
+Each prometheus component (prometheus, alertmanager, alertbuffer) can set nfs pv by setting corresponding variable:
+```
+openshift_prometheus_<COMPONENT>_storage_kind=<VALUE>
+openshift_prometheus_<COMPONENT>_storage_(access_modes|host|labels)=<VALUE>
+openshift_prometheus_<COMPONENT>_storage_volume_(name|size)=<VALUE>
+openshift_prometheus_<COMPONENT>_storage_nfs_(directory|options)=<VALUE>
+```
+e.g
+```
+openshift_prometheus_storage_kind=nfs
+openshift_prometheus_storage_access_modes=['ReadWriteOnce']
+openshift_prometheus_storage_host=nfs.example.com #for external host
+openshift_prometheus_storage_nfs_directory=/exports
+openshift_prometheus_storage_alertmanager_nfs_options='*(rw,root_squash)'
+openshift_prometheus_storage_volume_name=prometheus
+openshift_prometheus_storage_alertbuffer_volume_size=10Gi
+openshift_prometheus_storage_labels={'storage': 'prometheus'}
+```
+
+NOTE: Setting `openshift_prometheus_<COMPONENT>_storage_labels` overrides `openshift_prometheus_<COMPONENT>_pvc_pv_selector`
+
 
 ## Additional Alert Rules file variable
 An external file with alert rules can be added by setting path to additional rules variable: 

@@ -326,10 +326,8 @@ class IdentityProviderOauthBase(IdentityProviderBase):
         self._required += [['clientID', 'client_id'], ['clientSecret', 'client_secret']]
 
     def validate(self):
-        ''' validate this idp instance '''
-        if self.challenge:
-            raise errors.AnsibleFilterError("|failed provider {0} does not "
-                                            "allow challenge authentication".format(self.__class__.__name__))
+        ''' validate an instance of this idp class '''
+        pass
 
 
 class OpenIDIdentityProvider(IdentityProviderOauthBase):
@@ -363,7 +361,6 @@ class OpenIDIdentityProvider(IdentityProviderOauthBase):
 
     def validate(self):
         ''' validate this idp instance '''
-        IdentityProviderOauthBase.validate(self)
         if not isinstance(self.provider['claims'], dict):
             raise errors.AnsibleFilterError("|failed claims for provider {0} "
                                             "must be a dictionary".format(self.__class__.__name__))
@@ -429,6 +426,12 @@ class GoogleIdentityProvider(IdentityProviderOauthBase):
         IdentityProviderOauthBase.__init__(self, api_version, idp)
         self._optional += [['hostedDomain', 'hosted_domain']]
 
+    def validate(self):
+        ''' validate this idp instance '''
+        if self.challenge:
+            raise errors.AnsibleFilterError("|failed provider {0} does not "
+                                            "allow challenge authentication".format(self.__class__.__name__))
+
 
 class GitHubIdentityProvider(IdentityProviderOauthBase):
     """ GitHubIdentityProvider
@@ -446,6 +449,12 @@ class GitHubIdentityProvider(IdentityProviderOauthBase):
         IdentityProviderOauthBase.__init__(self, api_version, idp)
         self._optional += [['organizations'],
                            ['teams']]
+
+    def validate(self):
+        ''' validate this idp instance '''
+        if self.challenge:
+            raise errors.AnsibleFilterError("|failed provider {0} does not "
+                                            "allow challenge authentication".format(self.__class__.__name__))
 
 
 class FilterModule(object):
@@ -511,7 +520,7 @@ class FilterModule(object):
                  'master.kubelet-client.crt',
                  'master.kubelet-client.key']
         if bool(include_ca):
-            certs += ['ca.crt', 'ca.key', 'ca-bundle.crt']
+            certs += ['ca.crt', 'ca.key', 'ca-bundle.crt', 'client-ca-bundle.crt']
         if bool(include_keys):
             certs += ['serviceaccounts.private.key',
                       'serviceaccounts.public.key']

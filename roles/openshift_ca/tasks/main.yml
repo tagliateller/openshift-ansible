@@ -18,9 +18,7 @@
 
 - name: Reload generated facts
   openshift_facts:
-  when: install_result | changed
-  delegate_to: "{{ openshift_ca_host }}"
-  run_once: true
+  when: hostvars[openshift_ca_host].install_result | changed
 
 - name: Create openshift_ca_config_dir if it does not exist
   file:
@@ -107,6 +105,36 @@
   when: master_ca_missing | bool or openshift_certificates_redeploy | default(false) | bool
   delegate_to: "{{ openshift_ca_host }}"
   run_once: true
+
+# Create client-ca-bundle.crt containing old and new OpenShift CA
+# certificates. This bundle will be used when rolling the OpenShift CA
+# certificate.
+- name: Create client-ca-bundle.crt
+  block:
+  - command: mktemp -d /tmp/openshift-ansible-XXXXXX
+    register: openshift_ca_clientconfig_tmpdir
+    delegate_to: "{{ openshift_ca_host }}"
+  - copy:
+      src: "{{ item }}"
+      dest: "{{ openshift_ca_clientconfig_tmpdir.stdout }}/"
+      remote_src: true
+    with_items: "{{ g_master_legacy_ca_result.files | default([]) | oo_collect('path') }}"
+    delegate_to: "{{ openshift_ca_host }}"
+    run_once: true
+  - copy:
+      src: "{{ openshift_ca_config_dir }}/ca.crt"
+      dest: "{{ openshift_ca_clientconfig_tmpdir.stdout }}/"
+      remote_src: true
+    delegate_to: "{{ openshift_ca_host }}"
+    run_once: true
+  - assemble:
+      src: "{{ openshift_ca_clientconfig_tmpdir.stdout }}"
+      dest: "{{ openshift_ca_config_dir }}/client-ca-bundle.crt"
+      mode: 0644
+      owner: root
+      group: root
+    delegate_to: "{{ openshift_ca_host }}"
+    run_once: true
 
 - name: Test local loopback context
   command: >

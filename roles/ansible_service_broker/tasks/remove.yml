@@ -46,10 +46,28 @@
     resource_name: asb-access
     user: "system:serviceaccount:openshift-ansible-service-broker:asb-client"
 
+- name: remove asb-registry auth secret
+  oc_secret:
+    state: absent
+    name: asb-registry-auth
+    namespace: openshift-ansible-service-broker
+
 - name: remove asb-client token secret
   oc_secret:
     state: absent
     name: asb-client
+    namespace: openshift-ansible-service-broker
+
+- name: Remove etcd-auth secret
+  oc_secret:
+    state: absent
+    name: etcd-auth-secret
+    namespace: openshift-ansible-service-broker
+
+- name: Remove broker-etcd-auth secret
+  oc_secret:
+    state: absent
+    name: broker-etcd-auth-secret
     namespace: openshift-ansible-service-broker
 
 - name: remove ansible-service-broker service
@@ -57,6 +75,12 @@
     name: asb
     namespace: openshift-ansible-service-broker
     state: absent
+
+- name: remove asb-etcd service
+  oc_service:
+    state: absent
+    name: asb-etcd
+    namespace: openshift-ansible-service-broker
 
 - name: remove etcd service
   oc_service:
@@ -83,11 +107,19 @@
     kind: DeploymentConfig
     state: absent
 
+- name: remove Ansible Service Broker etcd deployment config
+  oc_obj:
+    name: asb-etcd
+    namespace: openshift-ansible-service-broker
+    kind: DeploymentConfig
+    state: absent
+
+
 - name: remove secret for broker auth
   oc_obj:
-    name: asb-auth-secret
+    name: asb-client
     namespace: openshift-ansible-service-broker
-    kind: Broker
+    kind: Secret
     state: absent
 
 # TODO: saw a oc_configmap in the library, but didn't understand how to get it to do the following:
@@ -99,11 +131,17 @@
     kind: ConfigMap
 
 # TODO: Is this going to work?
+- shell: >
+    oc get apiservices.apiregistration.k8s.io/v1beta1.servicecatalog.k8s.io -n kube-service-catalog || echo "not found"
+  register: get_apiservices
+  changed_when: no
+
 - name: remove broker object from the catalog
   oc_obj:
     name: ansible-service-broker
     state: absent
-    kind: ServiceBroker
+    kind: ClusterServiceBroker
+  when: not "'not found' in get_apiservices.stdout"
 
 - name: remove openshift-ansible-service-broker project
   oc_project:

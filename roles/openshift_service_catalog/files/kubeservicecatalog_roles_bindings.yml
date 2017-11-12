@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Template
 metadata:
-  name: service-catalog
+  name: service-catalog-role-bindings
 objects:
 
 - apiVersion: authorization.openshift.io/v1
@@ -118,6 +118,8 @@ objects:
     - servicecatalog.k8s.io
     resources:
     - clusterservicebrokers/status
+    - clusterserviceclasses/status
+    - clusterserviceplans/status
     - serviceinstances/status
     - servicebindings/status
     - servicebindings/finalizers

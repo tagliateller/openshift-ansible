@@ -177,30 +177,11 @@
     local_facts:
       no_proxy_etcd_host_ips: "{{ openshift_no_proxy_etcd_host_ips }}"
 
+- name: Update journald config
+  include: journald.yml
+
 - name: Install the systemd units
   include: systemd_units.yml
-
-- name: Checking for journald.conf
-  stat: path=/etc/systemd/journald.conf
-  register: journald_conf_file
-
-- name: Update journald setup
-  replace:
-    dest: /etc/systemd/journald.conf
-    regexp: '^(\#| )?{{ item.var }}=\s*.*?$'
-    replace: ' {{ item.var }}={{ item.val }}'
-    backup: yes
-  with_items: "{{ journald_vars_to_replace | default([]) }}"
-  when: journald_conf_file.stat.exists
-  register: journald_update
-
-# I need to restart journald immediatelly, otherwise it gets into way during
-# further steps in ansible
-- name: Restart journald
-  systemd:
-    name: systemd-journald
-    state: restarted
-  when: journald_update | changed
 
 - name: Install Master system container
   include: system_container.yml
@@ -237,18 +218,7 @@
   - restart master api
   - restart master controllers
 
-- name: modify controller args
-  yedit:
-    src: /etc/origin/master/master-config.yaml
-    edits:
-    - key: kubernetesMasterConfig.controllerArguments.cluster-signing-cert-file
-      value:
-      - /etc/origin/master/ca.crt
-    - key: kubernetesMasterConfig.controllerArguments.cluster-signing-key-file
-      value:
-      - /etc/origin/master/ca.key
-  notify:
-  - restart master controllers
+- include: bootstrap_settings.yml
   when: openshift_master_bootstrap_enabled | default(False)
 
 - include: set_loopback_context.yml
@@ -316,14 +286,13 @@
   - openshift.master.cluster_method == 'native'
   - master_api_service_status_changed | bool
 
-- name: Start and enable master controller on first master
+- name: Start and enable master controller service
   systemd:
     name: "{{ openshift.common.service_type }}-master-controllers"
     enabled: yes
     state: started
   when:
   - openshift.master.cluster_method == 'native'
-  - inventory_hostname == openshift_master_hosts[0]
   register: l_start_result
   until: not l_start_result | failed
   retries: 1
@@ -334,31 +303,8 @@
   when:
   - l_start_result | failed
 
-- name: Wait for master controller service to start on first master
-  pause:
-    seconds: 15
-  when:
-  - openshift.master.cluster_method == 'native'
-
-- name: Start and enable master controller on all masters
-  systemd:
-    name: "{{ openshift.common.service_type }}-master-controllers"
-    enabled: yes
-    state: started
-  when:
-  - openshift.master.cluster_method == 'native'
-  - inventory_hostname != openshift_master_hosts[0]
-  register: l_start_result
-  until: not l_start_result | failed
-  retries: 1
-  delay: 60
-
-- name: Dump logs from master-controllers if it failed
-  command: journalctl --no-pager -n 100 -u {{ openshift.common.service_type }}-master-controllers
-  when:
-  - l_start_result | failed
-
-- set_fact:
+- name: Set fact master_controllers_service_status_changed
+  set_fact:
     master_controllers_service_status_changed: "{{ l_start_result | changed }}"
   when:
   - openshift.master.cluster_method == 'native'

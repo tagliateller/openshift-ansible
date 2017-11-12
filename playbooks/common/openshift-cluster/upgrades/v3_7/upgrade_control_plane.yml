@@ -80,7 +80,6 @@
     # defined, and overriding the normal behavior of protecting the installed version
     openshift_release: "{{ openshift_upgrade_target }}"
     openshift_protect_installed_version: False
-    openshift_install_base_package_group: "oo_masters_to_config"
 
     # We skip the docker role at this point in upgrade to prevent
     # unintended package, container, or config upgrades which trigger
@@ -130,7 +129,7 @@
 
 # All controllers must be stopped at the same time then restarted
 - name: Cycle all controller services to force new leader election mode
-  hosts: oo_etcd_to_config
+  hosts: oo_masters_to_config
   gather_facts: no
   tasks:
   - name: Stop {{ openshift.common.service_type }}-master-controllers

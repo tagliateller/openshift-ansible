@@ -31,6 +31,7 @@ GlusterFS Install          : Not Started
 Hosted Install             : Complete
 Metrics Install            : Not Started
 Logging Install            : Not Started
+Prometheus Install         : Not Started
 Service Catalog Install    : Not Started
 
 -----------------------------------------------------
@@ -49,6 +50,7 @@ GlusterFS Install          : Not Started
 Hosted Install             : Not Started
 Metrics Install            : Not Started
 Logging Install            : Not Started
+Prometheus Install         : Not Started
 Service Catalog Install    : Not Started
 
 '''
@@ -70,6 +72,7 @@ class CallbackModule(CallbackBase):
         # Set the order of the installer phases
         installer_phases = [
             'installer_phase_initialize',
+            'installer_phase_health',
             'installer_phase_etcd',
             'installer_phase_nfs',
             'installer_phase_loadbalancer',
@@ -80,6 +83,7 @@ class CallbackModule(CallbackBase):
             'installer_phase_hosted',
             'installer_phase_metrics',
             'installer_phase_logging',
+            'installer_phase_prometheus',
             'installer_phase_servicecatalog',
             'installer_phase_management',
         ]
@@ -89,6 +93,10 @@ class CallbackModule(CallbackBase):
             'installer_phase_initialize': {
                 'title': 'Initialization',
                 'playbook': ''
+            },
+            'installer_phase_health': {
+                'title': 'Health Check',
+                'playbook': 'playbooks/byo/openshift-checks/pre-install.yml'
             },
             'installer_phase_etcd': {
                 'title': 'etcd Install',
@@ -130,6 +138,10 @@ class CallbackModule(CallbackBase):
                 'title': 'Logging Install',
                 'playbook': 'playbooks/byo/openshift-cluster/openshift-logging.yml'
             },
+            'installer_phase_prometheus': {
+                'title': 'Prometheus Install',
+                'playbook': 'playbooks/byo/openshift-cluster/openshift-prometheus.yml'
+            },
             'installer_phase_servicecatalog': {
                 'title': 'Service Catalog Install',
                 'playbook': 'playbooks/byo/openshift-cluster/service-catalog.yml'
@@ -159,11 +171,6 @@ class CallbackModule(CallbackBase):
                         self._display.display(
                             '\tThis phase can be restarted by running: {}'.format(
                                 phase_attributes[phase]['playbook']))
-                else:
-                    # Phase was not found in custom stats
-                    self._display.display(
-                        '{}{}: {}'.format(phase_title, ' ' * padding, 'Not Started'),
-                        color=C.COLOR_SKIP)
 
         self._display.display("", screen_only=True)
 

@@ -128,6 +128,7 @@
     access_modes: "{{ openshift_prometheus_pvc_access_modes }}"
     volume_capacity: "{{ openshift_prometheus_pvc_size }}"
     selector: "{{ openshift_prometheus_pvc_pv_selector }}"
+  when: openshift_prometheus_storage_type == 'pvc'
 
 - name: create alertmanager pvc
   oc_pvc:
@@ -136,6 +137,7 @@
     access_modes: "{{ openshift_prometheus_alertmanager_pvc_access_modes }}"
     volume_capacity: "{{ openshift_prometheus_alertmanager_pvc_size }}"
     selector: "{{ openshift_prometheus_alertmanager_pvc_pv_selector }}"
+  when: openshift_prometheus_alertmanager_storage_type == 'pvc'
 
 - name: create alertbuffer pvc
   oc_pvc:
@@ -144,22 +146,23 @@
     access_modes: "{{ openshift_prometheus_alertbuffer_pvc_access_modes }}"
     volume_capacity: "{{ openshift_prometheus_alertbuffer_pvc_size }}"
     selector: "{{ openshift_prometheus_alertbuffer_pvc_pv_selector }}"
+  when: openshift_prometheus_alertbuffer_storage_type == 'pvc'
 
-# create prometheus deployment
-- name: Set prometheus deployment template
+# create prometheus stateful set
+- name: Set prometheus template
   template:
-    src: prometheus_deployment.j2
+    src: prometheus.j2
     dest: "{{ tempdir }}/templates/prometheus.yaml"
   vars:
     namespace: "{{ openshift_prometheus_namespace }}"
-    prom_replicas: "{{ openshift_prometheus_replicas }}"
+#    prom_replicas: "{{ openshift_prometheus_replicas }}"
 
-- name: Set prometheus deployment
+- name: Set prometheus stateful set
   oc_obj:
     state: "{{ state }}"
     name: "prometheus"
     namespace: "{{ openshift_prometheus_namespace }}"
-    kind: deployment
+    kind: statefulset
     files:
       - "{{ tempdir }}/templates/prometheus.yaml"
     delete_after: true

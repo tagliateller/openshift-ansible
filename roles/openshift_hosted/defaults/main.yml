@@ -69,7 +69,6 @@ r_openshift_hosted_registry_use_firewalld: "{{ os_firewall_use_firewalld | defau
 
 openshift_hosted_registry_name: docker-registry
 openshift_hosted_registry_wait: "{{ not (openshift_master_bootstrap_enabled | default(False)) }}"
-registry_volume_claim: 'registry-claim'
 openshift_hosted_registry_cert_expire_days: 730
 
 r_openshift_hosted_registry_os_firewall_deny: []
@@ -81,6 +80,7 @@ r_openshift_hosted_registry_os_firewall_allow:
 openshift_hosted_registry_serviceaccount: registry
 openshift_hosted_registry_volumes: []
 openshift_hosted_registry_env_vars: {}
+openshift_hosted_registry_clusterip: null
 
 # These edits are being specified only to prevent 'changed' on rerun
 openshift_hosted_registry_edits:

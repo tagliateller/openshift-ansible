@@ -52,14 +52,6 @@
     - restart docker
   when: not (os_firewall_use_firewalld | default(False)) | bool
 
-- name: Add enterprise registry, if necessary
-  set_fact:
-    l2_docker_additional_registries: "{{ l2_docker_additional_registries + [openshift_docker_ent_reg] }}"
-  when:
-  - openshift.common.deployment_type == 'openshift-enterprise'
-  - openshift_docker_ent_reg != ''
-  - openshift_docker_ent_reg not in l2_docker_additional_registries
-
 - stat: path=/etc/sysconfig/docker
   register: docker_check
 
@@ -89,6 +81,7 @@
   template:
     dest: "{{ containers_registries_conf_path }}"
     src: registries.conf
+  when: openshift_docker_use_etc_containers | bool
   notify:
   - restart docker
 
@@ -161,16 +154,6 @@
 - set_fact:
     docker_service_status_changed: "{{ (r_docker_package_docker_start_result | changed) and (r_docker_already_running_result.stdout != 'ActiveState=active' ) }}"
 
-- name: Check for credentials file for registry auth
-  stat:
-    path: "{{ docker_cli_auth_config_path }}/config.json"
-  when: oreg_auth_user is defined
-  register: docker_cli_auth_credentials_stat
-
-- name: Create credentials for docker cli registry auth
-  command: "docker --config={{ docker_cli_auth_config_path }} login -u {{ oreg_auth_user }} -p {{ oreg_auth_password }} {{ oreg_host }}"
-  when:
-  - oreg_auth_user is defined
-  - (not docker_cli_auth_credentials_stat.stat.exists or oreg_auth_credentials_replace) | bool
+- include: registry_auth.yml
 
 - meta: flush_handlers
