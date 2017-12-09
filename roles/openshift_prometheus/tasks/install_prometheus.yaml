@@ -3,7 +3,7 @@
 # namespace
 - name: Add prometheus project
   oc_project:
-    state: "{{ state }}"
+    state: present
     name: "{{ openshift_prometheus_namespace }}"
     node_selector: "{{ openshift_prometheus_node_selector | oo_selector_to_string_list() }}"
     description: Prometheus
@@ -11,7 +11,7 @@
 # secrets
 - name: Set alert and prometheus secrets
   oc_secret:
-    state: "{{ state }}"
+    state: present
     name: "{{ item }}-proxy"
     namespace: "{{ openshift_prometheus_namespace }}"
     contents:
@@ -24,7 +24,7 @@
 # serviceaccount
 - name: create prometheus serviceaccount
   oc_serviceaccount:
-    state: "{{ state }}"
+    state: present
     name: prometheus
     namespace: "{{ openshift_prometheus_namespace }}"
     #    TODO add annotations when supproted
@@ -48,7 +48,7 @@
 # create clusterrolebinding for prometheus serviceaccount
 - name: Set cluster-reader permissions for prometheus
   oc_adm_policy_user:
-    state: "{{ state }}"
+    state: present
     namespace: "{{ openshift_prometheus_namespace }}"
     resource_kind: cluster-role
     resource_name: cluster-reader
@@ -58,7 +58,7 @@
 # TODO join into 1 task with loop
 - name: Create prometheus service
   oc_service:
-    state: "{{ state }}"
+    state: present
     name: "{{ item.name }}"
     namespace: "{{ openshift_prometheus_namespace }}"
     selector:
@@ -76,7 +76,7 @@
 
 - name: Create alerts service
   oc_service:
-    state: "{{ state }}"
+    state: present
     name: "{{ item.name }}"
     namespace: "{{ openshift_prometheus_namespace }}"
     selector:
@@ -111,14 +111,17 @@
 # create prometheus and alerts routes
 - name: create prometheus and alerts routes
   oc_route:
-    state: "{{ state }}"
+    state: present
     name: "{{ item.name }}"
+    host: "{{ item.host }}"
     namespace: "{{ openshift_prometheus_namespace }}"
     service_name: "{{ item.name }}"
     tls_termination: reencrypt
   with_items:
     - name: prometheus
+      host: "{{ openshift_prometheus_hostname }}"
     - name: alerts
+      host: "{{ openshift_prometheus_alerts_hostname }}"
 
 # Storage
 - name: create prometheus pvc
@@ -147,25 +150,6 @@
     volume_capacity: "{{ openshift_prometheus_alertbuffer_pvc_size }}"
     selector: "{{ openshift_prometheus_alertbuffer_pvc_pv_selector }}"
   when: openshift_prometheus_alertbuffer_storage_type == 'pvc'
-
-# create prometheus stateful set
-- name: Set prometheus template
-  template:
-    src: prometheus.j2
-    dest: "{{ tempdir }}/templates/prometheus.yaml"
-  vars:
-    namespace: "{{ openshift_prometheus_namespace }}"
-#    prom_replicas: "{{ openshift_prometheus_replicas }}"
-
-- name: Set prometheus stateful set
-  oc_obj:
-    state: "{{ state }}"
-    name: "prometheus"
-    namespace: "{{ openshift_prometheus_namespace }}"
-    kind: statefulset
-    files:
-      - "{{ tempdir }}/templates/prometheus.yaml"
-    delete_after: true
 
 # prometheus configmap
 # Copy the additional rules file if it is defined
@@ -204,7 +188,7 @@
 # In prometheus configmap create "additional.rules" section if file exists
 - name: Set prometheus configmap
   oc_configmap:
-    state: "{{ state }}"
+    state: present
     name: "prometheus"
     namespace: "{{ openshift_prometheus_namespace }}"
     from_file:
@@ -215,7 +199,7 @@
 
 - name: Set prometheus configmap
   oc_configmap:
-    state: "{{ state }}"
+    state: present
     name: "prometheus"
     namespace: "{{ openshift_prometheus_namespace }}"
     from_file:
@@ -231,8 +215,27 @@
 
 - name: Set alertmanager configmap
   oc_configmap:
-    state: "{{ state }}"
+    state: present
     name: "prometheus-alerts"
     namespace: "{{ openshift_prometheus_namespace }}"
     from_file:
       alertmanager.yml: "{{ tempdir }}/alertmanager.yml"
+
+# create prometheus stateful set
+- name: Set prometheus template
+  template:
+    src: prometheus.j2
+    dest: "{{ tempdir }}/templates/prometheus.yaml"
+  vars:
+    namespace: "{{ openshift_prometheus_namespace }}"
+#    prom_replicas: "{{ openshift_prometheus_replicas }}"
+
+- name: Set prometheus stateful set
+  oc_obj:
+    state: present
+    name: "prometheus"
+    namespace: "{{ openshift_prometheus_namespace }}"
+    kind: statefulset
+    files:
+      - "{{ tempdir }}/templates/prometheus.yaml"
+    delete_after: true

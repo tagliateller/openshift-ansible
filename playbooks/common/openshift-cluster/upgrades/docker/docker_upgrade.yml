@@ -1,11 +1,11 @@
 ---
-- include: ../../evaluate_groups.yml
+- import_playbook: ../../../../init/evaluate_groups.yml
   vars:
     # Do not allow adding hosts during upgrade.
     g_new_master_hosts: []
     g_new_node_hosts: []
 
-- include: ../initialize_nodes_to_upgrade.yml
+- import_playbook: ../initialize_nodes_to_upgrade.yml
 
 - name: Check for appropriate Docker versions
   hosts: oo_masters_to_config:oo_nodes_to_upgrade:oo_etcd_to_config
@@ -19,7 +19,7 @@
       msg: Cannot upgrade Docker on Atomic operating systems.
     when: openshift.common.is_atomic | bool
 
-  - include: upgrade_check.yml
+  - include_tasks: upgrade_check.yml
     when: docker_upgrade is not defined or docker_upgrade | bool
 
 
@@ -51,7 +51,7 @@
 
   - name: Drain Node for Kubelet upgrade
     command: >
-      {{ openshift.common.admin_binary }} drain {{ openshift.node.nodename }} --config={{ openshift.common.config_base }}/master/admin.kubeconfig --force --delete-local-data --ignore-daemonsets
+      {{ openshift.common.client_binary }} adm drain {{ openshift.node.nodename }} --config={{ openshift.common.config_base }}/master/admin.kubeconfig --force --delete-local-data --ignore-daemonsets
     delegate_to: "{{ groups.oo_first_master.0 }}"
     when: l_docker_upgrade is defined and l_docker_upgrade | bool and inventory_hostname in groups.oo_nodes_to_upgrade
     register: l_docker_upgrade_drain_result
@@ -59,7 +59,7 @@
     retries: 60
     delay: 60
 
-  - include: tasks/upgrade.yml
+  - include_tasks: tasks/upgrade.yml
     when: l_docker_upgrade is defined and l_docker_upgrade | bool
 
   - name: Set node schedulability

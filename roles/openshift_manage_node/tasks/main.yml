@@ -7,11 +7,7 @@
   # wait_for port doesn't provide health information.
   command: >
     curl --silent --tlsv1.2
-    {% if openshift.common.version_gte_3_2_or_1_2 | bool %}
     --cacert {{ openshift.common.config_base }}/master/ca-bundle.crt
-    {% else %}
-    --cacert {{ openshift.common.config_base }}/master/ca.crt
-    {% endif %}
     {{ openshift_node_master_api_url }}/healthz/ready
   args:
     # Disables the following warning:
@@ -41,7 +37,7 @@
 - name: Set node schedulability
   oc_adm_manage_node:
     node: "{{ openshift.node.nodename | lower }}"
-    schedulable: "{{ 'true' if openshift.node.schedulable | bool else 'false' }}"
+    schedulable: "{{ 'true' if l_openshift_manage_schedulable | bool else 'false' }}"
   retries: 10
   delay: 5
   register: node_schedulable

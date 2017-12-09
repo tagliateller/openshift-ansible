@@ -1,4 +1,15 @@
 ---
+- name: restart NetworkManager
+  systemd:
+    name: NetworkManager
+    state: restarted
+    enabled: True
+
+- name: restart dnsmasq
+  systemd:
+    name: dnsmasq
+    state: restarted
+
 - name: restart openvswitch
   systemd:
     name: openvswitch
@@ -23,7 +34,7 @@
 
 - name: restart node
   systemd:
-    name: "{{ openshift.common.service_type }}-node"
+    name: "{{ openshift_service_type }}-node"
     state: restarted
   register: l_openshift_node_restart_node_result
   until: not l_openshift_node_restart_node_result | failed

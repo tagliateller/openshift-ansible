@@ -1559,6 +1559,7 @@ class ServiceConfig(object):
                  sname,
                  namespace,
                  ports,
+                 annotations=None,
                  selector=None,
                  labels=None,
                  cluster_ip=None,
@@ -1570,6 +1571,7 @@ class ServiceConfig(object):
         self.name = sname
         self.namespace = namespace
         self.ports = ports
+        self.annotations = annotations
         self.selector = selector
         self.labels = labels
         self.cluster_ip = cluster_ip
@@ -1592,6 +1594,9 @@ class ServiceConfig(object):
             self.data['metadata']['labels'] = {}
             for lab, lab_value in self.labels.items():
                 self.data['metadata']['labels'][lab] = lab_value
+        if self.annotations:
+            self.data['metadata']['annotations'] = self.annotations
+
         self.data['spec'] = {}
 
         if self.ports:
@@ -3154,14 +3159,14 @@ def main():
             external_host_insecure=dict(default=False, type='bool'),
             external_host_partition_path=dict(default=None, type='str'),
             external_host_username=dict(default=None, type='str'),
-            external_host_password=dict(default=None, type='str'),
-            external_host_private_key=dict(default=None, type='str'),
+            external_host_password=dict(default=None, type='str', no_log=True),
+            external_host_private_key=dict(default=None, type='str', no_log=True),
             # Metrics
             expose_metrics=dict(default=False, type='bool'),
             metrics_image=dict(default=None, type='str'),
             # Stats
             stats_user=dict(default=None, type='str'),
-            stats_password=dict(default=None, type='str'),
+            stats_password=dict(default=None, type='str', no_log=True),
             stats_port=dict(default=1936, type='int'),
             # extra
             cacert_file=dict(default=None, type='str'),

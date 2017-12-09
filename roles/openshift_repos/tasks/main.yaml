@@ -9,6 +9,8 @@
   # TODO: This needs to be removed and placed into a role
   - name: Ensure libselinux-python is installed
     package: name=libselinux-python state=present
+    register: result
+    until: result | success
 
   - name: Remove openshift_additional.repo file
     file:
@@ -35,7 +37,7 @@
   - when: r_openshift_repos_has_run is not defined
     block:
 
-    - include: centos_repos.yml
+    - include_tasks: centos_repos.yml
       when:
       - ansible_os_family == "RedHat"
       - ansible_distribution != "Fedora"

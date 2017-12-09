@@ -1,24 +1,20 @@
 ---
-- set_fact:
-    l_use_crio_only: "{{ openshift_use_crio_only | default(false) }}"
-    l_is_system_container_image: "{{ openshift_use_master_system_container | default(openshift_use_system_containers | default(false)) | bool }}"
-- set_fact:
-    l_use_cli_atomic_image: "{{ l_use_crio_only or l_is_system_container_image }}"
-
 - name: Install clients
-  package: name={{ openshift.common.service_type }}-clients state=present
+  package: name={{ openshift_service_type }}-clients state=present
   when: not openshift.common.is_containerized | bool
+  register: result
+  until: result | success
 
 - block:
   - name: Pull CLI Image
     command: >
-      docker pull {{ openshift.common.cli_image }}:{{ openshift_image_tag }}
+      docker pull {{ openshift_cli_image }}:{{ openshift_image_tag }}
     register: pull_result
     changed_when: "'Downloaded newer image' in pull_result.stdout"
 
   - name: Copy client binaries/symlinks out of CLI image for use on the host
     openshift_container_binary_sync:
-      image: "{{ openshift.common.cli_image }}"
+      image: "{{ openshift_cli_image }}"
       tag: "{{ openshift_image_tag }}"
       backend: "docker"
   when:
@@ -28,13 +24,13 @@
 - block:
   - name: Pull CLI Image
     command: >
-      atomic pull --storage ostree {{ 'docker:' if openshift.common.system_images_registry == 'docker' else openshift.common.system_images_registry + '/' }}{{ openshift.common.cli_image }}:{{ openshift_image_tag }}
+      atomic pull --storage ostree {{ 'docker:' if system_images_registry == 'docker' else system_images_registry + '/' }}{{ openshift_cli_image }}:{{ openshift_image_tag }}
     register: pull_result
     changed_when: "'Pulling layer' in pull_result.stdout"
 
   - name: Copy client binaries/symlinks out of CLI image for use on the host
     openshift_container_binary_sync:
-      image: "{{ '' if openshift.common.system_images_registry == 'docker' else openshift.common.system_images_registry + '/' }}{{ openshift.common.cli_image }}"
+      image: "{{ '' if system_images_registry == 'docker' else system_images_registry + '/' }}{{ openshift_cli_image }}"
       tag: "{{ openshift_image_tag }}"
       backend: "atomic"
   when:
@@ -47,3 +43,5 @@
 - name: Install bash completion for oc tools
   package: name=bash-completion state=present
   when: not openshift.common.is_containerized | bool
+  register: result
+  until: result | success
