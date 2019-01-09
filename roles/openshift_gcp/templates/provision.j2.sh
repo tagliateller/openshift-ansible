@@ -2,27 +2,6 @@
 
 set -euo pipefail
 
-if [[ -n "{{ openshift_gcp_ssh_private_key }}" ]]; then
-    # Create SSH key for GCE
-    if [ ! -f "{{ openshift_gcp_ssh_private_key }}" ]; then
-        ssh-keygen -t rsa -f "{{ openshift_gcp_ssh_private_key }}" -C gce-provision-cloud-user -N ''
-        ssh-add "{{ openshift_gcp_ssh_private_key }}" || true
-    fi
-
-    # Check if the ~/.ssh/google_compute_engine.pub key is in the project metadata, and if not, add it there
-    pub_key=$(cut -d ' ' -f 2 < "{{ openshift_gcp_ssh_private_key }}.pub")
-    key_tmp_file='/tmp/ocp-gce-keys'
-    if ! gcloud --project "{{ openshift_gcp_project }}" compute project-info describe | grep -q "$pub_key"; then
-        if gcloud --project "{{ openshift_gcp_project }}" compute project-info describe | grep -q ssh-rsa; then
-            gcloud --project "{{ openshift_gcp_project }}" compute project-info describe | grep ssh-rsa | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/value: //' > "$key_tmp_file"
-        fi
-        echo -n 'cloud-user:' >> "$key_tmp_file"
-        cat "{{ openshift_gcp_ssh_private_key }}.pub" >> "$key_tmp_file"
-        gcloud --project "{{ openshift_gcp_project }}" compute project-info add-metadata --metadata-from-file "sshKeys=${key_tmp_file}"
-        rm -f "$key_tmp_file"
-    fi
-fi
-
 metadata=""
 if [[ -n "{{ openshift_gcp_startup_script_file }}" ]]; then
     if [[ ! -f "{{ openshift_gcp_startup_script_file }}" ]]; then
@@ -84,7 +63,7 @@ declare -A FW_RULES=(
   ['ssh-internal']='--allow tcp:22 --source-tags bastion'
   ['master-internal']="--allow tcp:2224,tcp:2379,tcp:2380,tcp:4001,udp:4789,udp:5404,udp:5405,tcp:8053,udp:8053,tcp:8444,tcp:10250,tcp:10255,udp:10255,tcp:24224,udp:24224 --source-tags ocp --target-tags ocp-master"
   ['master-external']="--allow tcp:80,tcp:443,tcp:1936,tcp:8080,tcp:8443${range} --target-tags ocp-master"
-  ['node-internal']="--allow udp:4789,tcp:10250,tcp:10255,udp:10255 --source-tags ocp --target-tags ocp-node,ocp-infra-node"
+  ['node-internal']="--allow udp:4789,tcp:10250,tcp:10255,udp:10255,tcp:9000-10000 --source-tags ocp --target-tags ocp-node,ocp-infra-node"
   ['infra-node-internal']="--allow tcp:5000 --source-tags ocp --target-tags ocp-infra-node"
   ['infra-node-external']="--allow tcp:80,tcp:443,tcp:1936${range} --target-tags ocp-infra-node"
 )
@@ -125,7 +104,7 @@ fi ) &
     if ! gcloud --project "{{ openshift_gcp_project }}" compute instance-templates describe "{{ openshift_gcp_prefix }}instance-template-{{ node_group.name }}" &>/dev/null; then
         gcloud --project "{{ openshift_gcp_project }}" compute instance-templates create "{{ openshift_gcp_prefix }}instance-template-{{ node_group.name }}" \
                 --machine-type "{{ node_group.machine_type }}" --network "{{ openshift_gcp_network_name }}" \
-                --tags "{{ openshift_gcp_prefix }}ocp,ocp,{{ 'ocp-bootstrap,' if (node_group.bootstrap | default(False)) else '' }}{{ node_group.tags }}" \
+                --tags "{{ openshift_gcp_prefix }}ocp,ocp,ocp-bootstrap,{{ node_group.tags }}" \
                 --boot-disk-size "{{ node_group.boot_disk_size }}" --boot-disk-type "pd-ssd" \
                 --scopes "logging-write,monitoring-write,useraccounts-ro,service-control,service-management,storage-ro,compute-rw" \
                 --image "{{ node_group.image | default('${image}') }}" ${metadata}  \
@@ -260,7 +239,7 @@ while true; do
         if [[ ! -f $dns ]]; then
             gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns start -z "${dns_zone}"
         fi
-        gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns add -z "${dns_zone}" --ttl 3600 --name "{{ openshift_master_cluster_public_hostname }}." --type A "$IP"
+        gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns add -z "${dns_zone}" --ttl {{ openshift_gcp_master_dns_ttl }} --name "{{ openshift_master_cluster_public_hostname }}." --type A "$IP"
     else
         echo "DNS record for '{{ openshift_master_cluster_public_hostname }}' already exists"
     fi
@@ -271,7 +250,7 @@ while true; do
         if [[ ! -f $dns ]]; then
             gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns start -z "${dns_zone}"
         fi
-        gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns add -z "${dns_zone}" --ttl 3600 --name "{{ openshift_master_cluster_hostname }}." --type A "$IP"
+        gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns add -z "${dns_zone}" --ttl {{ openshift_gcp_master_dns_ttl }} --name "{{ openshift_master_cluster_hostname }}." --type A "$IP"
     else
         echo "DNS record for '{{ openshift_master_cluster_hostname }}' already exists"
     fi
@@ -282,8 +261,8 @@ while true; do
         if [[ ! -f $dns ]]; then
             gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns start -z "${dns_zone}"
         fi
-        gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns add -z "${dns_zone}" --ttl 3600 --name "{{ wildcard_zone }}." --type A "$IP"
-        gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns add -z "${dns_zone}" --ttl 3600 --name "*.{{ wildcard_zone }}." --type CNAME "{{ wildcard_zone }}."
+        gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns add -z "${dns_zone}" --ttl {{ openshift_gcp_master_dns_ttl }} --name "{{ wildcard_zone }}." --type A "$IP"
+        gcloud --project "{{ openshift_gcp_project }}" dns record-sets transaction --transaction-file=$dns add -z "${dns_zone}" --ttl {{ openshift_gcp_master_dns_ttl }} --name "*.{{ wildcard_zone }}." --type CNAME "{{ wildcard_zone }}."
     else
         echo "DNS record for '{{ wildcard_zone }}' already exists"
     fi
@@ -303,12 +282,12 @@ done
 ) &
 
 # Create bucket for registry
-( 
+(
 if ! gsutil ls -p "{{ openshift_gcp_project }}" "gs://{{ openshift_gcp_registry_bucket_name }}" &>/dev/null; then
     gsutil mb -p "{{ openshift_gcp_project }}" -l "{{ openshift_gcp_region }}" "gs://{{ openshift_gcp_registry_bucket_name }}"
 else
     echo "Bucket '{{ openshift_gcp_registry_bucket_name }}' already exists"
-fi 
+fi
 ) &
 
 # wait until all node groups are stable

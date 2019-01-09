@@ -1,9 +1,10 @@
 ---
 - name: nickhammond.logrotate | Install logrotate
-  package: name=logrotate state=present
-  when: not openshift.common.is_atomic | bool
+  package:
+    name: logrotate
+    state: present
   register: result
-  until: result | success
+  until: result is succeeded
 
 - name: nickhammond.logrotate | Setup logrotate.d scripts
   template:

@@ -3,11 +3,10 @@
   package:
     name: openssl
     state: present
-  when: not etcd_is_atomic | bool
   delegate_to: "{{ etcd_ca_host }}"
   run_once: true
   register: result
-  until: result | success
+  until: result is succeeded
 
 - file:
     path: "{{ item }}"
@@ -43,7 +42,10 @@
   run_once: true
 
 - name: Check etcd_ca_db exist
-  stat: path="{{ etcd_ca_db }}"
+  stat:
+    path: "{{ etcd_ca_db }}"
+    get_checksum: false
+    get_mime: false
   register: etcd_ca_db_check
   changed_when: false
   delegate_to: "{{ etcd_ca_host }}"

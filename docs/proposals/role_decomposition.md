@@ -115,12 +115,12 @@ providing the location of the generated certificates to the individual roles.
     generated_certs_dir: "{{openshift.common.config_base}}/logging"
 
 ## Elasticsearch
-- include_role:
+- import_role:
     name: openshift_logging_elasticsearch
   vars:
     generated_certs_dir: "{{openshift.common.config_base}}/logging"
 
-- include_role:
+- import_role:
     name: openshift_logging_elasticsearch
   vars:
     generated_certs_dir: "{{openshift.common.config_base}}/logging"
@@ -130,7 +130,7 @@ providing the location of the generated certificates to the individual roles.
 
 
 ## Kibana
-- include_role:
+- import_role:
     name: openshift_logging_kibana
   vars:
     generated_certs_dir: "{{openshift.common.config_base}}/logging"
@@ -144,7 +144,7 @@ providing the location of the generated certificates to the individual roles.
     openshift_logging_kibana_es_port: "{{ openshift_logging_es_port }}"
     openshift_logging_kibana_image_pull_secret: "{{ openshift_logging_image_pull_secret }}"
 
-- include_role:
+- import_role:
     name: openshift_logging_kibana
   vars:
     generated_certs_dir: "{{openshift.common.config_base}}/logging"
@@ -173,7 +173,7 @@ providing the location of the generated certificates to the individual roles.
 
 
 ## Curator
-- include_role:
+- import_role:
     name: openshift_logging_curator
   vars:
     generated_certs_dir: "{{openshift.common.config_base}}/logging"
@@ -183,7 +183,7 @@ providing the location of the generated certificates to the individual roles.
     openshift_logging_curator_image_version: "{{ openshift_logging_image_version }}"
     openshift_logging_curator_image_pull_secret: "{{ openshift_logging_image_pull_secret }}"
 
-- include_role:
+- import_role:
     name: openshift_logging_curator
   vars:
     generated_certs_dir: "{{openshift.common.config_base}}/logging"
@@ -201,7 +201,7 @@ providing the location of the generated certificates to the individual roles.
 
 
 ## Fluentd
-- include_role:
+- import_role:
     name: openshift_logging_fluentd
   vars:
     generated_certs_dir: "{{openshift.common.config_base}}/logging"
@@ -330,7 +330,7 @@ in meta/main.yml without:
 ## Avoiding overly verbose roles
 When we are splitting our roles up into smaller components we want to ensure we
 avoid creating roles that are, for a lack of a better term, overly verbose. What
-do we mean by that? If we have `openshift_master` as an example, and we were to
+do we mean by that? If we have `openshift_control_plane` as an example, and we were to
 split it up, we would have a component for `etcd`, `docker`, and possibly for
 its rpms/configs. We would want to avoid creating a role that would just create
 certificates as those would make sense to be contained with the rpms and configs.

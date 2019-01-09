@@ -13,11 +13,14 @@
 #####
 - name: Create an iam role
   iam_role:
-    name: "{{ item.value.iam_role }}"
+    name: "{{ openshift_aws_launch_config_iam_roles[l_item].name }}"
     assume_role_policy_document: "{{ lookup('file','trustpolicy.json') }}"
     state: "{{ openshift_aws_iam_role_state | default('present') }}"
-  when: item.value.iam_role is defined
-  with_dict: "{{ l_nodes_to_build }}"
+  loop: "{{ openshift_aws_launch_config_iam_roles | list }}"
+  loop_control:
+    loop_var: l_item
+  retries: 3
+  delay: 3
 
 #####
 # The second part of this task file is linking the role to a policy
@@ -28,9 +31,13 @@
 - name: create an iam policy
   iam_policy:
     iam_type: role
-    iam_name: "{{ item.value.iam_role }}"
-    policy_json: "{{ item.value.policy_json }}"
-    policy_name: "{{ item.value.policy_name }}"
+    iam_name: "{{ openshift_aws_launch_config_iam_roles[l_item].name }}"
+    policy_json: "{{ openshift_aws_launch_config_iam_roles[l_item].policy_json }}"
+    policy_name: "{{ openshift_aws_launch_config_iam_roles[l_item].policy_name }}"
     state: "{{ openshift_aws_iam_role_state | default('present') }}"
-  when: item.value.iam_role is defined
-  with_dict: "{{ l_nodes_to_build }}"
+  register: l_iam_create_policy_out
+  loop: "{{ openshift_aws_launch_config_iam_roles | list }}"
+  loop_control:
+    loop_var: l_item
+  retries: 3
+  delay: 3

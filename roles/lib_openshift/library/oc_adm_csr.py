@@ -34,7 +34,9 @@
 from __future__ import print_function
 import atexit
 import copy
+import fcntl
 import json
+import time
 import os
 import re
 import shutil
@@ -140,7 +142,7 @@ class YeditException(Exception):  # pragma: no cover
     pass
 
 
-# pylint: disable=too-many-public-methods
+# pylint: disable=too-many-public-methods,too-many-instance-attributes
 class Yedit(object):  # pragma: no cover
     ''' Class to modify yaml files '''
     re_valid_key = r"(((\[-?\d+\])|([0-9a-zA-Z%s/_-]+)).?)+$"
@@ -153,6 +155,7 @@ class Yedit(object):  # pragma: no cover
                  content=None,
                  content_type='yaml',
                  separator='.',
+                 backup_ext=None,
                  backup=False):
         self.content = content
         self._separator = separator
@@ -160,6 +163,11 @@ class Yedit(object):  # pragma: no cover
         self.__yaml_dict = content
         self.content_type = content_type
         self.backup = backup
+        if backup_ext is None:
+            self.backup_ext = ".{}".format(time.strftime("%Y%m%dT%H%M%S"))
+        else:
+            self.backup_ext = backup_ext
+
         self.load(content_type=self.content_type)
         if self.__yaml_dict is None:
             self.__yaml_dict = {}
@@ -199,14 +207,35 @@ class Yedit(object):  # pragma: no cover
 
         return True
 
+    # pylint: disable=too-many-return-statements,too-many-branches
     @staticmethod
-    def remove_entry(data, key, sep='.'):
+    def remove_entry(data, key, index=None, value=None, sep='.'):
         ''' remove data at location key '''
         if key == '' and isinstance(data, dict):
-            data.clear()
+            if value is not None:
+                data.pop(value)
+            elif index is not None:
+                raise YeditException("remove_entry for a dictionary does not have an index {}".format(index))
+            else:
+                data.clear()
+
             return True
+
         elif key == '' and isinstance(data, list):
-            del data[:]
+            ind = None
+            if value is not None:
+                try:
+                    ind = data.index(value)
+                except ValueError:
+                    return False
+            elif index is not None:
+                ind = index
+            else:
+                del data[:]
+
+            if ind is not None:
+                data.pop(ind)
+
             return True
 
         if not (key and Yedit.valid_key(key, sep)) and \
@@ -321,7 +350,9 @@ class Yedit(object):  # pragma: no cover
         tmp_filename = filename + '.yedit'
 
         with open(tmp_filename, 'w') as yfd:
+            fcntl.flock(yfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             yfd.write(contents)
+            fcntl.flock(yfd, fcntl.LOCK_UN)
 
         os.rename(tmp_filename, filename)
 
@@ -331,7 +362,7 @@ class Yedit(object):  # pragma: no cover
             raise YeditException('Please specify a filename.')
 
         if self.backup and self.file_exists():
-            shutil.copy(self.filename, self.filename + '.orig')
+            shutil.copy(self.filename, '{}{}'.format(self.filename, self.backup_ext))
 
         # Try to set format attributes if supported
         try:
@@ -340,10 +371,16 @@ class Yedit(object):  # pragma: no cover
             pass
 
         # Try to use RoundTripDumper if supported.
-        try:
-            Yedit._write(self.filename, yaml.dump(self.yaml_dict, Dumper=yaml.RoundTripDumper))
-        except AttributeError:
-            Yedit._write(self.filename, yaml.safe_dump(self.yaml_dict, default_flow_style=False))
+        if self.content_type == 'yaml':
+            try:
+                Yedit._write(self.filename, yaml.dump(self.yaml_dict, Dumper=yaml.RoundTripDumper))
+            except AttributeError:
+                Yedit._write(self.filename, yaml.safe_dump(self.yaml_dict, default_flow_style=False))
+        elif self.content_type == 'json':
+            Yedit._write(self.filename, json.dumps(self.yaml_dict, indent=4, sort_keys=True))
+        else:
+            raise YeditException('Unsupported content_type: {}.'.format(self.content_type) +
+                                 'Please specify a content_type of yaml or json.')
 
         return (True, self.yaml_dict)
 
@@ -391,7 +428,7 @@ class Yedit(object):  # pragma: no cover
 
                 # Try to use RoundTripLoader if supported.
                 try:
-                    self.yaml_dict = yaml.safe_load(contents, yaml.RoundTripLoader)
+                    self.yaml_dict = yaml.load(contents, yaml.RoundTripLoader)
                 except AttributeError:
                     self.yaml_dict = yaml.safe_load(contents)
 
@@ -450,7 +487,7 @@ class Yedit(object):  # pragma: no cover
 
         return (False, self.yaml_dict)
 
-    def delete(self, path):
+    def delete(self, path, index=None, value=None):
         ''' remove path from a dict'''
         try:
             entry = Yedit.get_entry(self.yaml_dict, path, self.separator)
@@ -460,7 +497,7 @@ class Yedit(object):  # pragma: no cover
         if entry is None:
             return (False, self.yaml_dict)
 
-        result = Yedit.remove_entry(self.yaml_dict, path, self.separator)
+        result = Yedit.remove_entry(self.yaml_dict, path, index, value, self.separator)
         if not result:
             return (False, self.yaml_dict)
 
@@ -636,7 +673,7 @@ class Yedit(object):  # pragma: no cover
 
         curr_value = invalue
         if val_type == 'yaml':
-            curr_value = yaml.load(invalue)
+            curr_value = yaml.safe_load(str(invalue))
         elif val_type == 'json':
             curr_value = json.loads(invalue)
 
@@ -705,6 +742,8 @@ class Yedit(object):  # pragma: no cover
         '''perform the idempotent crud operations'''
         yamlfile = Yedit(filename=params['src'],
                          backup=params['backup'],
+                         content_type=params['content_type'],
+                         backup_ext=params['backup_ext'],
                          separator=params['separator'])
 
         state = params['state']
@@ -735,7 +774,7 @@ class Yedit(object):  # pragma: no cover
             if params['update']:
                 rval = yamlfile.pop(params['key'], params['value'])
             else:
-                rval = yamlfile.delete(params['key'])
+                rval = yamlfile.delete(params['key'], params['index'], params['value'])
 
             if rval[0] and params['src']:
                 yamlfile.write()
@@ -854,7 +893,7 @@ class OpenShiftCLI(object):
 
     # Pylint allows only 5 arguments to be passed.
     # pylint: disable=too-many-arguments
-    def _replace_content(self, resource, rname, content, force=False, sep='.'):
+    def _replace_content(self, resource, rname, content, edits=None, force=False, sep='.'):
         ''' replace the current object with the content '''
         res = self._get(resource, rname)
         if not res['results']:
@@ -863,13 +902,24 @@ class OpenShiftCLI(object):
         fname = Utils.create_tmpfile(rname + '-')
 
         yed = Yedit(fname, res['results'][0], separator=sep)
-        changes = []
-        for key, value in content.items():
-            changes.append(yed.put(key, value))
+        updated = False
 
-        if any([change[0] for change in changes]):
+        if content is not None:
+            changes = []
+            for key, value in content.items():
+                changes.append(yed.put(key, value))
+
+            if any([change[0] for change in changes]):
+                updated = True
+
+        elif edits is not None:
+            results = Yedit.process_edits(edits, yed)
+
+            if results['changed']:
+                updated = True
+
+        if updated:
             yed.write()
-
             atexit.register(Utils.cleanup, [fname])
 
             return self._replace(fname, force)
@@ -931,7 +981,7 @@ class OpenShiftCLI(object):
             cmd.append(template_name)
         if params:
             param_str = ["{}={}".format(key, str(value).replace("'", r'"')) for key, value in params.items()]
-            cmd.append('-v')
+            cmd.append('-p')
             cmd.extend(param_str)
 
         results = self.openshift_cmd(cmd, output=True, input_data=template_data)
@@ -947,12 +997,18 @@ class OpenShiftCLI(object):
 
         return self.openshift_cmd(['create', '-f', fname])
 
-    def _get(self, resource, name=None, selector=None):
+    def _get(self, resource, name=None, selector=None, field_selector=None):
         '''return a resource by name '''
         cmd = ['get', resource]
+
         if selector is not None:
             cmd.append('--selector={}'.format(selector))
-        elif name is not None:
+
+        if field_selector is not None:
+            cmd.append('--field-selector={}'.format(field_selector))
+
+        # Name cannot be used with selector or field_selector.
+        if selector is None and field_selector is None and name is not None:
             cmd.append(name)
 
         cmd.extend(['-o', 'json'])
@@ -1116,7 +1172,7 @@ class Utils(object):  # pragma: no cover
         ''' Actually write the file contents to disk. This helps with mocking. '''
 
         with open(filename, 'w') as sfd:
-            sfd.write(contents)
+            sfd.write(str(contents))
 
     @staticmethod
     def create_tmp_file_from_contents(rname, data, ftype='yaml'):
@@ -1257,9 +1313,10 @@ class Utils(object):  # pragma: no cover
                 version = version.split("-")[0]
 
             if version.startswith('v'):
-                versions_dict[tech + '_numeric'] = version[1:].split('+')[0]
-                # "v3.3.0.33" is what we have, we want "3.3"
-                versions_dict[tech + '_short'] = version[1:4]
+                version = version[1:]  # Remove the 'v' prefix
+                versions_dict[tech + '_numeric'] = version.split('+')[0]
+                # "3.3.0.33" is what we have, we want "3.3"
+                versions_dict[tech + '_short'] = "{}.{}".format(*version.split('.'))
 
         return versions_dict
 
@@ -1450,11 +1507,15 @@ class OCcsr(OpenShiftCLI):
         results = self._get(resource='nodes')['results'][0]['items']
 
         for node in nodes:
-            nodes_list.append(dict(name=node, csrs={}, accepted=False, denied=False))
+            nodes_list.append(dict(name=node, csrs={}, server_accepted=False, client_accepted=False, denied=False))
 
+            # Ready nodes have already been accepted. Mark client and server as accepted.
             for ocnode in results:
-                if node in ocnode['metadata']['name']:
-                    nodes_list[-1]['accepted'] = True
+                if ocnode['metadata']['name'] == node:
+                    for condition in ocnode['status']['conditions']:
+                        if condition['type'] == 'Ready' and condition['status'] == 'True':
+                            nodes_list[-1]['server_accepted'] = True
+                            nodes_list[-1]['client_accepted'] = True
 
         return nodes_list
 
@@ -1497,23 +1558,26 @@ class OCcsr(OpenShiftCLI):
             if node['name'] in self.get_csr_request(csr['spec']['request']):
                 node['csrs'][csr['metadata']['name']] = csr
 
-                # check that the username is the node and type is 'Approved'
-                if node['name'] in csr['spec']['username'] and csr['status']:
-                    if csr['status']['conditions'][0]['type'] == 'Approved':
-                        node['accepted'] = True
+                # client certs may come in as either the service_account or as the node during upgrade
+                # server certs always come in as the node
+                if ((node['name'] in csr['spec']['username'] or
+                     csr['spec']['username'] in [self.service_account, 'system:admin']) and
+                        csr['status'] and csr['status']['conditions'][0]['type'] == 'Approved'):
+                    if 'server auth' in csr['spec']['usages']:
+                        node['server_accepted'] = True
+                    if 'client auth' in csr['spec']['usages']:
+                        node['client_accepted'] = True
                 # check type is 'Denied' and mark node as such
                 if csr['status'] and csr['status']['conditions'][0]['type'] == 'Denied':
                     node['denied'] = True
-
                 return node
-
         return None
 
     def finished(self):
         '''determine if there are more csrs to sign'''
         # if nodes is set and we have nodes then return if all nodes are 'accepted'
         if self.nodes is not None and len(self.nodes) > 0:
-            return all([node['accepted'] or node['denied'] for node in self.nodes])
+            return all([(node['server_accepted'] and node['client_accepted']) or node['denied'] for node in self.nodes])
 
         # we are approving everything or we still have nodes outstanding
         return False
@@ -1537,20 +1601,27 @@ class OCcsr(OpenShiftCLI):
         for csr in self.csrs:
             node = self.match_node(csr)
             # oc adm certificate <approve|deny> csr
-            # there are 3 known states: Denied, Aprroved, {}
+            # there are 3 known states: Denied, Approved, {}
             # verify something is needed by OCcsr.action_needed
             # if approve_all, then do it
             # if you passed in nodes, you must have a node that matches
             if self.approve_all or (node and OCcsr.action_needed(csr, action)):
                 result = self.openshift_cmd(['certificate', action, csr['metadata']['name']], oadm=True)
-                # client should have service account name in username field
-                # server should have node name in username field
-                if node and csr['metadata']['name'] not in node['csrs']:
-                    node['csrs'][csr['metadata']['name']] = csr
+                # if we successfully approved
+                if result['returncode'] == 0:
+                    # client should have service account name in username field
+                    # server should have node name in username field
+                    if node and csr['metadata']['name'] not in node['csrs']:
+                        node['csrs'][csr['metadata']['name']] = csr
 
-                    # accept node in cluster
-                    if node['name'] in csr['spec']['username']:
-                        node['accepted'] = True
+                    # mark node as accepted in our list of nodes
+                    # we will use {client,server}_accepted fields to determine if we're finished
+                    if (node['name'] in csr['spec']['username'] or
+                            csr['spec']['username'] in [self.service_account, 'system:admin']):
+                        if 'server auth' in csr['spec']['usages']:
+                            node['server_accepted'] = True
+                        if 'client auth' in csr['spec']['usages']:
+                            node['client_accepted'] = True
 
                 results.append(result)
 
@@ -1558,7 +1629,7 @@ class OCcsr(OpenShiftCLI):
 
     @staticmethod
     def run_ansible(params, check_mode=False):
-        '''run the idempotent ansible code'''
+        '''run the oc_adm_csr module'''
 
         client = OCcsr(params['nodes'],
                        params['approve_all'],
@@ -1582,7 +1653,6 @@ class OCcsr(OpenShiftCLI):
             all_results = []
             finished = False
             timeout = False
-            import time
             # loop for timeout or block until all nodes pass
             ctr = 0
             while True:
@@ -1607,7 +1677,7 @@ class OCcsr(OpenShiftCLI):
 
             for result in all_results:
                 if result['returncode'] != 0:
-                    return {'failed': True, 'msg': all_results}
+                    return {'failed': True, 'msg': all_results, 'timeout': timeout}
 
             return dict(changed=len(all_results) > 0,
                         results=all_results,
@@ -1618,7 +1688,6 @@ class OCcsr(OpenShiftCLI):
 
         return {'failed': True,
                 'msg': 'Unknown state passed. %s' % state}
-
 
 # -*- -*- -*- End included fragment: class/oc_adm_csr.py -*- -*- -*-
 
@@ -1638,7 +1707,8 @@ def main():
             nodes=dict(default=None, type='list'),
             timeout=dict(default=30, type='int'),
             approve_all=dict(default=False, type='bool'),
-            service_account=dict(default='node-bootstrapper', type='str'),
+            service_account=dict(default='system:serviceaccount:openshift-infra:node-bootstrapper', type='str'),
+            fail_on_timeout=dict(default=False, type='bool'),
         ),
         supports_check_mode=True,
         mutually_exclusive=[['approve_all', 'nodes']],
@@ -1648,6 +1718,12 @@ def main():
         module.fail_json(**dict(failed=True, msg='Please specify hosts.'))
 
     rval = OCcsr.run_ansible(module.params, module.check_mode)
+
+    # If we timed out then we weren't finished. Fail if user requested to fail.
+    if (module.params['timeout'] > 0 and
+            module.params['fail_on_timeout'] and
+            rval['timeout']):
+        return module.fail_json(msg='Timed out accepting certificate signing requests. Failing as requested.', **rval)
 
     if 'failed' in rval:
         return module.fail_json(**rval)

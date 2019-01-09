@@ -2,8 +2,7 @@
 bin
 docs
 hack
-inventory
-test
+inventory/hosts.*
 utils
 **/*.md
 *.spec

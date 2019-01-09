@@ -34,7 +34,9 @@
 from __future__ import print_function
 import atexit
 import copy
+import fcntl
 import json
+import time
 import os
 import re
 import shutil
@@ -144,7 +146,7 @@ class YeditException(Exception):  # pragma: no cover
     pass
 
 
-# pylint: disable=too-many-public-methods
+# pylint: disable=too-many-public-methods,too-many-instance-attributes
 class Yedit(object):  # pragma: no cover
     ''' Class to modify yaml files '''
     re_valid_key = r"(((\[-?\d+\])|([0-9a-zA-Z%s/_-]+)).?)+$"
@@ -157,6 +159,7 @@ class Yedit(object):  # pragma: no cover
                  content=None,
                  content_type='yaml',
                  separator='.',
+                 backup_ext=None,
                  backup=False):
         self.content = content
         self._separator = separator
@@ -164,6 +167,11 @@ class Yedit(object):  # pragma: no cover
         self.__yaml_dict = content
         self.content_type = content_type
         self.backup = backup
+        if backup_ext is None:
+            self.backup_ext = ".{}".format(time.strftime("%Y%m%dT%H%M%S"))
+        else:
+            self.backup_ext = backup_ext
+
         self.load(content_type=self.content_type)
         if self.__yaml_dict is None:
             self.__yaml_dict = {}
@@ -203,14 +211,35 @@ class Yedit(object):  # pragma: no cover
 
         return True
 
+    # pylint: disable=too-many-return-statements,too-many-branches
     @staticmethod
-    def remove_entry(data, key, sep='.'):
+    def remove_entry(data, key, index=None, value=None, sep='.'):
         ''' remove data at location key '''
         if key == '' and isinstance(data, dict):
-            data.clear()
+            if value is not None:
+                data.pop(value)
+            elif index is not None:
+                raise YeditException("remove_entry for a dictionary does not have an index {}".format(index))
+            else:
+                data.clear()
+
             return True
+
         elif key == '' and isinstance(data, list):
-            del data[:]
+            ind = None
+            if value is not None:
+                try:
+                    ind = data.index(value)
+                except ValueError:
+                    return False
+            elif index is not None:
+                ind = index
+            else:
+                del data[:]
+
+            if ind is not None:
+                data.pop(ind)
+
             return True
 
         if not (key and Yedit.valid_key(key, sep)) and \
@@ -325,7 +354,9 @@ class Yedit(object):  # pragma: no cover
         tmp_filename = filename + '.yedit'
 
         with open(tmp_filename, 'w') as yfd:
+            fcntl.flock(yfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             yfd.write(contents)
+            fcntl.flock(yfd, fcntl.LOCK_UN)
 
         os.rename(tmp_filename, filename)
 
@@ -335,7 +366,7 @@ class Yedit(object):  # pragma: no cover
             raise YeditException('Please specify a filename.')
 
         if self.backup and self.file_exists():
-            shutil.copy(self.filename, self.filename + '.orig')
+            shutil.copy(self.filename, '{}{}'.format(self.filename, self.backup_ext))
 
         # Try to set format attributes if supported
         try:
@@ -344,10 +375,16 @@ class Yedit(object):  # pragma: no cover
             pass
 
         # Try to use RoundTripDumper if supported.
-        try:
-            Yedit._write(self.filename, yaml.dump(self.yaml_dict, Dumper=yaml.RoundTripDumper))
-        except AttributeError:
-            Yedit._write(self.filename, yaml.safe_dump(self.yaml_dict, default_flow_style=False))
+        if self.content_type == 'yaml':
+            try:
+                Yedit._write(self.filename, yaml.dump(self.yaml_dict, Dumper=yaml.RoundTripDumper))
+            except AttributeError:
+                Yedit._write(self.filename, yaml.safe_dump(self.yaml_dict, default_flow_style=False))
+        elif self.content_type == 'json':
+            Yedit._write(self.filename, json.dumps(self.yaml_dict, indent=4, sort_keys=True))
+        else:
+            raise YeditException('Unsupported content_type: {}.'.format(self.content_type) +
+                                 'Please specify a content_type of yaml or json.')
 
         return (True, self.yaml_dict)
 
@@ -395,7 +432,7 @@ class Yedit(object):  # pragma: no cover
 
                 # Try to use RoundTripLoader if supported.
                 try:
-                    self.yaml_dict = yaml.safe_load(contents, yaml.RoundTripLoader)
+                    self.yaml_dict = yaml.load(contents, yaml.RoundTripLoader)
                 except AttributeError:
                     self.yaml_dict = yaml.safe_load(contents)
 
@@ -454,7 +491,7 @@ class Yedit(object):  # pragma: no cover
 
         return (False, self.yaml_dict)
 
-    def delete(self, path):
+    def delete(self, path, index=None, value=None):
         ''' remove path from a dict'''
         try:
             entry = Yedit.get_entry(self.yaml_dict, path, self.separator)
@@ -464,7 +501,7 @@ class Yedit(object):  # pragma: no cover
         if entry is None:
             return (False, self.yaml_dict)
 
-        result = Yedit.remove_entry(self.yaml_dict, path, self.separator)
+        result = Yedit.remove_entry(self.yaml_dict, path, index, value, self.separator)
         if not result:
             return (False, self.yaml_dict)
 
@@ -640,7 +677,7 @@ class Yedit(object):  # pragma: no cover
 
         curr_value = invalue
         if val_type == 'yaml':
-            curr_value = yaml.load(invalue)
+            curr_value = yaml.safe_load(str(invalue))
         elif val_type == 'json':
             curr_value = json.loads(invalue)
 
@@ -709,6 +746,8 @@ class Yedit(object):  # pragma: no cover
         '''perform the idempotent crud operations'''
         yamlfile = Yedit(filename=params['src'],
                          backup=params['backup'],
+                         content_type=params['content_type'],
+                         backup_ext=params['backup_ext'],
                          separator=params['separator'])
 
         state = params['state']
@@ -739,7 +778,7 @@ class Yedit(object):  # pragma: no cover
             if params['update']:
                 rval = yamlfile.pop(params['key'], params['value'])
             else:
-                rval = yamlfile.delete(params['key'])
+                rval = yamlfile.delete(params['key'], params['index'], params['value'])
 
             if rval[0] and params['src']:
                 yamlfile.write()
@@ -858,7 +897,7 @@ class OpenShiftCLI(object):
 
     # Pylint allows only 5 arguments to be passed.
     # pylint: disable=too-many-arguments
-    def _replace_content(self, resource, rname, content, force=False, sep='.'):
+    def _replace_content(self, resource, rname, content, edits=None, force=False, sep='.'):
         ''' replace the current object with the content '''
         res = self._get(resource, rname)
         if not res['results']:
@@ -867,13 +906,24 @@ class OpenShiftCLI(object):
         fname = Utils.create_tmpfile(rname + '-')
 
         yed = Yedit(fname, res['results'][0], separator=sep)
-        changes = []
-        for key, value in content.items():
-            changes.append(yed.put(key, value))
+        updated = False
 
-        if any([change[0] for change in changes]):
+        if content is not None:
+            changes = []
+            for key, value in content.items():
+                changes.append(yed.put(key, value))
+
+            if any([change[0] for change in changes]):
+                updated = True
+
+        elif edits is not None:
+            results = Yedit.process_edits(edits, yed)
+
+            if results['changed']:
+                updated = True
+
+        if updated:
             yed.write()
-
             atexit.register(Utils.cleanup, [fname])
 
             return self._replace(fname, force)
@@ -935,7 +985,7 @@ class OpenShiftCLI(object):
             cmd.append(template_name)
         if params:
             param_str = ["{}={}".format(key, str(value).replace("'", r'"')) for key, value in params.items()]
-            cmd.append('-v')
+            cmd.append('-p')
             cmd.extend(param_str)
 
         results = self.openshift_cmd(cmd, output=True, input_data=template_data)
@@ -951,12 +1001,18 @@ class OpenShiftCLI(object):
 
         return self.openshift_cmd(['create', '-f', fname])
 
-    def _get(self, resource, name=None, selector=None):
+    def _get(self, resource, name=None, selector=None, field_selector=None):
         '''return a resource by name '''
         cmd = ['get', resource]
+
         if selector is not None:
             cmd.append('--selector={}'.format(selector))
-        elif name is not None:
+
+        if field_selector is not None:
+            cmd.append('--field-selector={}'.format(field_selector))
+
+        # Name cannot be used with selector or field_selector.
+        if selector is None and field_selector is None and name is not None:
             cmd.append(name)
 
         cmd.extend(['-o', 'json'])
@@ -1120,7 +1176,7 @@ class Utils(object):  # pragma: no cover
         ''' Actually write the file contents to disk. This helps with mocking. '''
 
         with open(filename, 'w') as sfd:
-            sfd.write(contents)
+            sfd.write(str(contents))
 
     @staticmethod
     def create_tmp_file_from_contents(rname, data, ftype='yaml'):
@@ -1261,9 +1317,10 @@ class Utils(object):  # pragma: no cover
                 version = version.split("-")[0]
 
             if version.startswith('v'):
-                versions_dict[tech + '_numeric'] = version[1:].split('+')[0]
-                # "v3.3.0.33" is what we have, we want "3.3"
-                versions_dict[tech + '_short'] = version[1:4]
+                version = version[1:]  # Remove the 'v' prefix
+                versions_dict[tech + '_numeric'] = version.split('+')[0]
+                # "3.3.0.33" is what we have, we want "3.3"
+                versions_dict[tech + '_short'] = "{}.{}".format(*version.split('.'))
 
         return versions_dict
 
@@ -1534,7 +1591,7 @@ class OCProcess(OpenShiftCLI):
     # pylint: disable=too-many-return-statements
     @staticmethod
     def run_ansible(params, check_mode):
-        '''run the ansible idempotent code'''
+        '''run the oc_process module'''
 
         ocprocess = OCProcess(params['namespace'],
                               params['template_name'],
@@ -1598,7 +1655,6 @@ class OCProcess(OpenShiftCLI):
                 return {"failed": True, "changed": update, "msg": rval, "state": state}
 
         return {"changed": update, "results": rval, "state": state}
-
 
 # -*- -*- -*- End included fragment: class/oc_process.py -*- -*- -*-
 

@@ -6,6 +6,10 @@ metadata:
     provider: openshift
     component: "{{ daemonset_component }}"
     logging-infra: "{{ daemonset_component }}"
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "24231"
+    prometheus.io/scheme: "http"
 spec:
   selector:
     matchLabels:
@@ -22,13 +26,16 @@ spec:
         logging-infra: "{{ daemonset_component }}"
         provider: openshift
         component: "{{ daemonset_component }}"
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
+      priorityClassName: cluster-logging
       serviceAccountName: "{{ daemonset_serviceAccount }}"
       nodeSelector:
         {{ fluentd_nodeselector_key }}: "{{ fluentd_nodeselector_value }}"
       containers:
       - name: "{{ daemonset_container_name }}"
-        image: "{{ openshift_logging_fluentd_image_prefix }}{{ daemonset_name }}:{{ openshift_logging_fluentd_image_version }}"
+        image: "{{ openshift_logging_fluentd_image }}"
         imagePullPolicy: IfNotPresent
         securityContext:
           privileged: true
@@ -59,7 +66,7 @@ spec:
         - name: varlog
           mountPath: /var/log
         - name: varlibdockercontainers
-          mountPath: /var/lib/docker/containers
+          mountPath: /var/lib/docker
           readOnly: true
         - name: config
           mountPath: /etc/fluent/configs.d/user
@@ -76,6 +83,9 @@ spec:
         - name: dockercfg
           mountPath: /etc/sysconfig/docker
           readOnly: true
+        - name: originnodecfg
+          mountPath: /etc/origin/node
+          readOnly: true
         - name: dockerdaemoncfg
           mountPath: /etc/docker
           readOnly: true
@@ -89,6 +99,8 @@ spec:
           readOnly: true
 {% endif %}
         env:
+        - name: "MERGE_JSON_LOG"
+          value: "{{ openshift_logging_fluentd_merge_json_log }}"
         - name: "K8S_HOST_URL"
           value: "{{ openshift_logging_fluentd_master_url }}"
         - name: "ES_HOST"
@@ -130,14 +142,14 @@ spec:
               containerName: "{{ daemonset_container_name }}"
               resource: limits.memory
         - name: "FILE_BUFFER_LIMIT"
-          value: "{{ openshift_logging_fluentd_file_buffer_limit | default('256i') }}"
+          value: "{{ openshift_logging_fluentd_file_buffer_limit | default('256Mi') }}"
 {% if openshift_logging_mux_client_mode is defined and
      ((openshift_logging_mux_allow_external is defined and openshift_logging_mux_allow_external | bool) or
       (openshift_logging_use_mux is defined and openshift_logging_use_mux | bool)) %}
         - name: "MUX_CLIENT_MODE"
           value: "{{ openshift_logging_mux_client_mode }}"
 {% endif %}
-{% if openshift_logging_install_eventrouter is defined and openshift_logging_install_eventrouter %}
+{% if openshift_logging_install_eventrouter is defined and (openshift_logging_install_eventrouter | bool) %}
         - name: "TRANSFORM_EVENTS"
           value: "true"
 {% endif %}
@@ -218,7 +230,7 @@ spec:
           path: /var/log
       - name: varlibdockercontainers
         hostPath:
-          path: /var/lib/docker/containers
+          path: /var/lib/docker
       - name: config
         configMap:
           name: logging-fluentd
@@ -234,6 +246,9 @@ spec:
       - name: dockercfg
         hostPath:
           path: /etc/sysconfig/docker
+      - name: originnodecfg
+        hostPath:
+          path: /etc/origin/node
       - name: dockerdaemoncfg
         hostPath:
           path: /etc/docker

@@ -14,21 +14,27 @@ To install, set the following inventory configuration parameters:
 * `openshift_use_openshift_sdn=False`
 * `os_sdn_network_plugin_name='cni'`
 
-For more information, see [Calico's official OpenShift Installation Documentation](https://docs.projectcalico.org/latest/getting-started/openshift/installation#bring-your-own-etcd)
+By default, Calico will share the etcd used by OpenShift.
+To configure Calico to use a separate instance of etcd, place etcd SSL client certs on your master,
+then set the following variables in your inventory.ini:
 
-## Improving security with BYO-etcd
+* `calico_etcd_ca_cert_file=/path/to/etcd-ca.crt`
+* `calico_etcd_cert_file=/path/to/etcd-client.crt`
+* `calico_etcd_key_file=/path/to/etcd-client.key`
+* `calico_etcd_endpoints=https://etcd:2379`
 
-By default, Calico uses the etcd set up by OpenShift. To accomplish this, it generates and distributes client etcd certificates to each node.
-Distributing these certs across the cluster in this way weakens the overall security,
-so Calico should not be deployed in production in this mode.
+## Upgrading
 
-Instead, Calico can be installed in BYO-etcd mode, where it connects to an externally
-set up etcd. For information on deploying Calico in BYO-etcd mode, see 
-[Calico's official OpenShift Installation Documentation](https://docs.projectcalico.org/latest/getting-started/openshift/installation#bring-your-own-etcd)
+OpenShift-Ansible installs Calico as a self-hosted install. Previously, Calico ran as a systemd service. Running Calico
+in this manner is now deprecated, and must be upgraded to a hosted cluster. Please run the Legacy Upgrade playbook to
+upgrade your existing Calico deployment to a hosted deployment:
 
-## Calico Configuration Options
+        ansible-playbook -i inventory.ini playbooks/byo/calico/legacy_upgrade.yml
+
+## Additional Calico/Node and Felix Configuration Options
 
 Additional parameters that can be defined in the inventory are:
+
 
 | Environment | Description | Schema | Default |   
 |---------|----------------------|---------|---------|

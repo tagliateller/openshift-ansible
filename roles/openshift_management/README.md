@@ -89,17 +89,6 @@ App is created` task, we recommend running the
 [uninstall scripts](#uninstall) first before running the installer
 again.
 
-### Beta
-
-Only required for enterprise
-(`openshift_deployment_type=openshift-enterprise`) users:
-
-* `openshift_management_install_beta` - by setting this value to
-  `true` you acknowledge that this software is currently in BETA and
-  support may be limited nonexistent. This is required to begin the
-  installation.
-
-
 # Requirements
 
 The **default** requirements are listed in the table below. These can
@@ -139,13 +128,12 @@ installer.
 | `openshift_management_project`                       | **No**   | `openshift-management`         | Namespace for the installation.     |
 | `openshift_management_project_description`           | **No**   | *CloudForms Management Engine* | Namespace/project description.      |
 | `openshift_management_install_management`            | **No**   | `false`                        | Boolean, set to `true` to install the application |
-| `openshift_management_install_beta`                  | **No**   | `false`                        | Boolean, by setting this value to `true` you acknowledge that this software is currently in BETA and support may be limited. Only required for *openshift-enterprise* users. |
 | `openshift_management_username`                      | **No**   | `admin`                        | Default management username. Changing this values **does not change the username**. Only change this value if you have changed the name already and are running integration scripts (such as the [add container provider](#container-provider) script) |
 | `openshift_management_password`                      | **No**   | `smartvm`                      | Default management password. Changing this values **does not change the password**. Only change this value if you have changed the password already and are running integration scripts (such as the [add-container-provider](#container-provider) script) |
 | **PRODUCT CHOICE**  | | | | |
 | `openshift_management_app_template`                  | **No**   | `miq-template`                 | The project flavor to install. Choices: <ul><li>`miq-template`: ManageIQ using a podified database</li> <li> `miq-template-ext-db`: ManageIQ using an external database</li> <li>`cfme-template`: CloudForms using a podified database<sup>[1]</sup></li> <li> `cfme-template-ext-db`: CloudForms using an external database.<sup>[1]</sup></li></ul> |
 | **STORAGE CLASSES** | | | | |
-| `openshift_management_storage_class`                 | **No**   | `nfs`                          | Storage type to use, choices: <ul><li>`nfs` - Best used for proof-of-concept installs. Will setup NFS on a cluster host (defaults to your first master in the inventory file) to back the required PVCs. The application requires a PVC and the database (which may be hosted externally) may require a second. PVC minimum required sizes are 5GiB for the MIQ application, and 15GiB for the PostgreSQL database (20GiB minimum available space on a volume/partition if used specifically for NFS purposes)</li> <li>`nfs_external` - You are using an external NFS server, such as a netapp appliance. See the [Configuration - Storage Classes](#storage-classes) section below for required information.</li> <li>`preconfigured` - This CFME role will do NOTHING to modify storage settings. This option assumes expert knowledge and that you have done everything required ahead of time.</li> <li>`cloudprovider` - You are using an OCP cloudprovider integration for your storage class. For this to work you must have already configured the required inventory parameters for your cloud provider. Ensure `openshift_cloudprovider_kind` is defined (aws or gce) and that the applicable cloudprovider parameters are provided. |
+| `openshift_management_storage_class`                 | **No**   | `nfs`                          | Storage type to use, choices: <ul><li>`nfs` - Best used for proof-of-concept installs. Will setup NFS on a cluster host (defaults to your first master in the inventory file) to back the required PVCs. The application requires a PVC and the database (which may be hosted externally) may require a second. PVC minimum required sizes are 5GiB for the MIQ application, and 15GiB for the PostgreSQL database (20GiB minimum available space on a volume/partition if used specifically for NFS purposes)</li> <li>`nfs_external` - You are using an external NFS server, such as a netapp appliance. See the [Configuration - Storage Classes](#storage-classes) section below for required information.</li> <li>`preconfigured` - This CFME role will do NOTHING to modify storage settings. This option assumes expert knowledge and that you have done everything required ahead of time.</li> <li>`cloudprovider` - You are using an OCP cloudprovider integration for your storage class. For this to work you must have already configured the required inventory parameters for your cloud provider. Ensure `openshift_cloudprovider_kind` is defined (aws, azure or gce) and that the applicable cloudprovider parameters are provided. |
 | `openshift_management_storage_nfs_external_hostname` | **No**   | `false`                        | If you are using an *external NFS server*, such as a netapp appliance, then you must set the hostname here. Leave the value as `false` if you are not using external NFS. <br /> *Additionally*: **External NFS REQUIRES** that you create the NFS exports that will back the application PV and optionally the database PV.
 | `openshift_management_storage_nfs_base_dir`          | **No**   | `/exports/`                    | If you are using **External NFS** then you may set the base path to the exports location here. <br />**Local NFS Note**: You *may* also change this value if you want to change the default path used for local NFS exports. |
 | `openshift_management_storage_nfs_local_hostname`    | **No**   | `false`                        | If you do not have an `[nfs]` group in your inventory, or want to simply manually define the local NFS host in your cluster, set this parameter to the hostname of the preferred NFS server. The server must be a part of your OCP/Origin cluster. |

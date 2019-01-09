@@ -10,7 +10,7 @@ This role requires that the control host it is run on has Java installed as part
 generation for Elasticsearch (it uses JKS) as well as openssl to sign certificates.
 
 As part of the installation, it is recommended that you add the Fluentd node selector label
-to the list of persisted [node labels](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-node-host-labels).
+to the list of persisted [node labels](https://docs.okd.io/latest/install_config/install/advanced_install.html#configuring-node-host-labels).
 
 ### Required vars:
 
@@ -20,28 +20,15 @@ When `openshift_logging_install_logging` is set to `False` the `openshift_loggin
 
 ### Optional vars:
 - `openshift_logging_purge_logging`: When `openshift_logging_install_logging` is set to 'False' to trigger uninstalation and `openshift_logging_purge_logging` is set to 'True', it will completely and irreversibly remove all logging persistent data including PVC. Defaults to 'False'.
-- `openshift_logging_image_prefix`: The prefix for the logging images to use. Defaults to 'docker.io/openshift/origin-'.
-- `openshift_logging_curator_image_prefix`: Setting the image prefix for Curator image. Defaults to `openshift_logging_image_prefix`.
-- `openshift_logging_elasticsearch_image_prefix`: Setting the image prefix for Elasticsearch image. Defaults to `openshift_logging_image_prefix`.
-- `openshift_logging_fluentd_image_prefix`: Setting the image prefix for Fluentd image. Defaults to `openshift_logging_image_prefix`.
-- `openshift_logging_kibana_image_prefix`: Setting the image prefix for Kibana image. Defaults to `openshift_logging_image_prefix`.
-- `openshift_logging_kibana_proxy_image_prefix`: Setting the image prefix for Kibana proxy image. Defaults to `openshift_logging_image_prefix`.
-- `openshift_logging_mux_image_prefix`: Setting the image prefix for Mux image. Defaults to `openshift_logging_image_prefix`.
-- `openshift_logging_image_version`: The image version for the logging images to use. Defaults to 'latest'.
-- `openshift_logging_curator_image_version`: Setting the image version for Curator image. Defaults to `openshift_logging_image_version`.
-- `openshift_logging_elasticsearch_image_version`: Setting the image version for Elasticsearch image. Defaults to `openshift_logging_image_version`.
-- `openshift_logging_fluentd_image_version`: Setting the image version for Fluentd image. Defaults to `openshift_logging_image_version`.
-- `openshift_logging_kibana_image_version`: Setting the image version for Kibana image. Defaults to `openshift_logging_image_version`.
-- `openshift_logging_kibana_proxy_image_version`: Setting the image version for Kibana proxy image. Defaults to `openshift_logging_image_version`.
-- `openshift_logging_mux_image_version`: Setting the image version for Mux image. Defaults to `openshift_logging_image_version`.
 - `openshift_logging_use_ops`: If 'True', set up a second ES and Kibana cluster for infrastructure logs. Defaults to 'False'.
 - `openshift_logging_master_url`: The URL for the Kubernetes master, this does not need to be public facing but should be accessible from within the cluster. Defaults to 'https://kubernetes.default.svc.{{openshift.common.dns_domain}}'.
-- `openshift_logging_master_public_url`: The public facing URL for the Kubernetes master, this is used for Authentication redirection. Defaults to 'https://{{openshift.common.public_hostname}}:{{openshift.master.api_port}}'.
-- `openshift_logging_namespace`: The namespace that Aggregated Logging will be installed in. Defaults to 'logging'.
+- `openshift_logging_master_public_url`: The public facing URL for the Kubernetes master, this is used for Authentication redirection. Defaults to 'https://{{openshift.common.public_hostname}}:{{openshift_master_api_port}}'.
+- `openshift_logging_namespace`: The namespace that Aggregated Logging will be installed in. Defaults to 'openshift-logging'.
 - `openshift_logging_curator_default_days`: The default minimum age (in days) Curator uses for deleting log records. Defaults to '30'.
 - `openshift_logging_curator_run_hour`: The hour of the day that Curator will run at. Defaults to '0'.
 - `openshift_logging_curator_run_minute`: The minute of the hour that Curator will run at. Defaults to '0'.
 - `openshift_logging_curator_run_timezone`: The timezone that Curator uses for figuring out its run time. Defaults to 'UTC'.
+- `openshift_logging_curator_timeout`: The timeout for each Curator operation. Defaults to 300.
 - `openshift_logging_curator_script_log_level`: The script log level for Curator. Defaults to 'INFO'.
 - `openshift_logging_curator_log_level`: The log level for the Curator process. Defaults to 'ERROR'.
 - `openshift_logging_curator_cpu_request`: The minimum amount of CPU to allocate to Curator. Default is '100m'.
@@ -58,6 +45,7 @@ When `openshift_logging_install_logging` is set to `False` the `openshift_loggin
 - `openshift_logging_kibana_replica_count`: The number of replicas Kibana should be scaled up to. Defaults to 1.
 - `openshift_logging_kibana_nodeselector`: A map of labels (e.g. {"node":"infra","region":"west"} to select the nodes where the pod will land.
 - `openshift_logging_kibana_edge_term_policy`: Insecure Edge Termination Policy. Defaults to Redirect.
+- `openshift_logging_kibana_env_vars`: A map of environment variables to add to the kibana deployment config (e.g. {"ELASTICSEARCH_REQUESTTIMEOUT":"30000"})
 
 - `openshift_logging_fluentd_nodeselector`: The node selector that the Fluentd daemonset uses to determine where to deploy to. Defaults to '"logging-infra-fluentd": "true"'.
 - `openshift_logging_fluentd_cpu_request`: The minimum amount of CPU to allocate for Fluentd collector pods. Defaults to '100m'.
@@ -65,9 +53,9 @@ When `openshift_logging_install_logging` is set to `False` the `openshift_loggin
 - `openshift_logging_fluentd_use_journal`: *DEPRECATED - DO NOT USE* Fluentd will automatically detect whether or not Docker is using the journald log driver.
 - `openshift_logging_fluentd_journal_read_from_head`: If empty, Fluentd will use its internal default, which is false.
 - `openshift_logging_fluentd_hosts`: List of nodes that should be labeled for Fluentd to be deployed to. Defaults to ['--all'].
-- `openshift_logging_fluentd_buffer_queue_limit`: Buffer queue limit for Fluentd. Defaults to 1024.
-- `openshift_logging_fluentd_buffer_size_limit`: Buffer chunk limit for Fluentd. Defaults to 1m.
-- `openshift_logging_fluentd_file_buffer_limit`: Fluentd will set the value to the file buffer limit.  Defaults to '1Gi' per destination.
+- `openshift_logging_fluentd_buffer_queue_limit`: Buffer queue limit for Fluentd. Defaults to 32.
+- `openshift_logging_fluentd_buffer_size_limit`: Buffer chunk limit for Fluentd. Defaults to 8m.
+- `openshift_logging_fluentd_file_buffer_limit`: Fluentd will set the value to the file buffer limit.  Defaults to '256Mi' per destination.
 
 - `openshift_logging_fluentd_audit_container_engine`: When `openshift_logging_fluentd_audit_container_engine` is set to `True`, the audit log of the container engine will be collected and stored in ES.
 - `openshift_logging_fluentd_audit_file`: Location of audit log file. The default is `/var/log/audit/audit.log`
@@ -177,12 +165,14 @@ Elasticsearch OPS too, if using an OPS cluster:
   clients will use to connect to mux, and will be used in the TLS server cert
   subject.
 - `openshift_logging_mux_port`: 24284
+- `openshift_logging_mux_external_address`: The IP address that mux will listen
+ on for connections from *external* clients.  Default is the default ipv4
+ interface as reported by the `ansible_default_ipv4` fact.
 - `openshift_logging_mux_cpu_request`: 100m
 - `openshift_logging_mux_memory_limit`: 512Mi
-- `openshift_logging_mux_default_namespaces`: Default `["mux-undefined"]` - the
- first value in the list is the namespace to use for undefined projects,
- followed by any additional namespaces to create by default - users will
- typically not need to set this
+- `openshift_logging_mux_default_namespaces`:
+  openshift_logging_mux_default_namespaces is not supported.
+  use openshift_logging_mux_namespaces instead.
 - `openshift_logging_mux_namespaces`: Default `[]` - additional namespaces to
   create for _external_ mux clients to associate with their logs - users will
   need to set this
@@ -215,7 +205,7 @@ Elasticsearch OPS too, if using an OPS cluster:
 - `openshift_logging_fluentd_remote_syslog_use_record`: Set `true` to use the severity and facility from the record, defaults to `false`
 - `openshift_logging_fluentd_remote_syslog_payload_key`: If string is specified, use this field from the record as the payload on the syslog message
 
-The corresponding openshift\_logging\_mux\_* parameters are below.
+The corresponding `openshift_logging_mux_*` parameters are below.
 
 - `openshift_logging_mux_remote_syslog`: Set `true` to enable remote syslog forwarding, defaults to `false`
 - `openshift_logging_mux_remote_syslog_host`: Required, hostname or IP of remote syslog server
@@ -227,9 +217,22 @@ The corresponding openshift\_logging\_mux\_* parameters are below.
 - `openshift_logging_mux_remote_syslog_use_record`: Set `true` to use the severity and facility from the record, defaults to `false`
 - `openshift_logging_mux_remote_syslog_payload_key`: If string is specified, use this field from the record as the payload on the syslog message
 
+Cri-o Formatted Container Logs
+------------------------------
+In order to enable cri-o logs parsing, the `openshift_logging_fluentd` role
+mounts `node-config.yaml` from the host to the fluentd container to this path:
+```
+/etc/origin/node/node-config.yaml
+```
+
+Fluentd pod on startup automatically determines from the `node-config.yaml`
+whether to setup `in_tail` plugin to parse cri-o formatted logs in
+`/var/log/containers/*` based on the
+`kubeletArguments -> container-runtime-endpoint` value.
+
 Image update procedure
 ----------------------
-An upgrade of the logging stack from older version to newer is an automated process and should be performed by calling appropriate ansible playbook and setting required ansible variables in your inventory as documented in https://docs.openshift.org/.
+An upgrade of the logging stack from older version to newer is an automated process and should be performed by calling appropriate ansible playbook and setting required ansible variables in your inventory as documented in https://docs.okd.io/.
 
 Following text describes manual update of the logging images without version upgrade. To determine the current version of images being used you can.
 ```
@@ -256,10 +259,10 @@ $ docker inspect ff2e249fc45a
             "Labels": {
                 . . .
                 "build-date": "2017-10-12T14:38:22.414827",
-                . . . 
+                . . .
                 "release": "0.143.3.0",
                 . . .
-                "url": "https://access.redhat.com/containers/#/registry.access.redhat.com/openshift3/logging-fluentd/images/v3.7.0-0.143.3.0",
+                "url": "https://access.redhat.com/containers/#/registry.redhat.io/openshift3/logging-fluentd/images/v3.7.0-0.143.3.0",
                 . . .
                 "version": "v3.7.0"
             }
@@ -275,13 +278,13 @@ $ docker pull <registry>/openshift3/logging-fluentd:v3.7
 If there was an update, you need to run the `docker pull` on each node.
 
 It is recommended that you now rerun the `openshift_logging` playbook to ensure that any necessary config changes are also picked up.
- 
+
 To manually redeploy your pod you can do the following:
 - for a DC you can do:
 ```
 oc rollout latest <dc_name>
 ```
-     
+
 - for a RC you can scale down and scale back up
 ```
 oc scale --replicas=0 <rc_name>
@@ -302,4 +305,4 @@ Tue Oct 26, 2017
 - Make CPU request equal limit if limit is greater then request
 
 Tue Oct 10, 2017
-- Default imagePullPolicy changed from Always to IfNotPresent 
+- Default imagePullPolicy changed from Always to IfNotPresent

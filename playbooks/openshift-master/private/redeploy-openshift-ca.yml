@@ -120,12 +120,10 @@
   - role: openshift_master_facts
   - role: openshift_named_certificates
   - role: openshift_ca
-    openshift_ca_host: "{{ groups.oo_first_master.0 }}"
 
 - name: Create temp directory for syncing certs
   hosts: localhost
   connection: local
-  become: no
   gather_facts: no
   tasks:
   - name: Create local temp directory for syncing certs
@@ -133,10 +131,14 @@
     register: g_master_mktemp
     changed_when: false
 
+  - name: Chmod local temp directory for syncing certs
+    local_action: file path="{{ g_master_mktemp.stdout }}" mode=0777
+    changed_when: false
+
 - name: Retrieve OpenShift CA
   hosts: oo_first_master
-  vars:
-    openshift_ca_host: "{{ groups.oo_first_master.0 }}"
+  roles:
+  - openshift_facts
   tasks:
   - name: Retrieve CA certificate, key, bundle and serial
     fetch:
@@ -157,8 +159,8 @@
 
 - name: Distribute OpenShift CA to masters
   hosts: oo_masters_to_config
-  vars:
-    openshift_ca_host: "{{ groups.oo_first_master.0 }}"
+  roles:
+  - openshift_facts
   tasks:
   - name: Deploy CA certificate, key, bundle and serial
     copy:
@@ -212,27 +214,27 @@
   when:
   # masters
   - ('expired' not in hostvars
-      | oo_select_keys(groups['oo_masters_to_config'])
-      | oo_collect('check_results.check_results.ocp_certs')
-      | oo_collect('health', {'path':hostvars[groups.oo_first_master.0].openshift.common.config_base ~ "/master/master.server.crt"}))
+      | lib_utils_oo_select_keys(groups['oo_masters_to_config'])
+      | lib_utils_oo_collect('check_results.check_results.ocp_certs')
+      | lib_utils_oo_collect('health', {'path':hostvars[groups.oo_first_master.0].openshift.common.config_base ~ "/master/master.server.crt"}))
   - ('expired' not in hostvars
-      | oo_select_keys(groups['oo_masters_to_config'])
-      | oo_collect('check_results.check_results.ocp_certs')
-      | oo_collect('health', {'path':hostvars[groups.oo_first_master.0].openshift.common.config_base ~ "/master/ca-bundle.crt"}))
+      | lib_utils_oo_select_keys(groups['oo_masters_to_config'])
+      | lib_utils_oo_collect('check_results.check_results.ocp_certs')
+      | lib_utils_oo_collect('health', {'path':hostvars[groups.oo_first_master.0].openshift.common.config_base ~ "/master/ca-bundle.crt"}))
   # etcd
   - ('expired' not in (hostvars
-      | oo_select_keys(groups['etcd'])
-      | oo_collect('check_results.check_results.etcd')
-      | oo_collect('health')))
+      | lib_utils_oo_select_keys(groups['etcd'])
+      | lib_utils_oo_collect('check_results.check_results.etcd')
+      | lib_utils_oo_collect('health')))
 
 - name: Distribute OpenShift CA certificate to nodes
   hosts: oo_nodes_to_config
-  vars:
-    openshift_ca_host: "{{ groups.oo_first_master.0 }}"
+  roles:
+  - openshift_facts
   tasks:
   - copy:
       src: "{{ hostvars['localhost'].g_master_mktemp.stdout }}/ca-bundle.crt"
-      dest: "{{ openshift.common.config_base }}/node/ca.crt"
+      dest: "{{ openshift.common.config_base }}/node/client-ca.crt"
   - name: Copy OpenShift CA to system CA trust
     copy:
       src: "{{ item.cert }}"
@@ -240,13 +242,13 @@
       remote_src: yes
     with_items:
     - id: openshift
-      cert: "{{ openshift.common.config_base }}/node/ca.crt"
+      cert: "{{ openshift.common.config_base }}/node/client-ca.crt"
     notify:
     - update ca trust
   - name: Update node client kubeconfig CA data
     kubeclient_ca:
-      client_path: "{{ openshift.common.config_base }}/node/system:node:{{ openshift.common.hostname }}.kubeconfig"
-      ca_path: "{{ openshift.common.config_base }}/node/ca.crt"
+      client_path: "{{ openshift.common.config_base }}/node/node.kubeconfig"
+      ca_path: "{{ openshift.common.config_base }}/node/client-ca.crt"
   handlers:
   # Normally this handler would restart docker after updating ca
   # trust. We'll do that when we restart nodes to avoid restarting
@@ -264,7 +266,6 @@
 - name: Delete temporary directory on localhost
   hosts: localhost
   connection: local
-  become: no
   gather_facts: no
   tasks:
   - file:
@@ -277,24 +278,24 @@
   when:
   # nodes
   - ('expired' not in hostvars
-      | oo_select_keys(groups['oo_nodes_to_config'])
-      | oo_collect('check_results.check_results.ocp_certs')
-      | oo_collect('health', {'path':hostvars[groups.oo_nodes_to_config.0].openshift.common.config_base ~ "/node/server.crt"}))
+      | lib_utils_oo_select_keys(groups['oo_nodes_to_config'])
+      | lib_utils_oo_collect('check_results.check_results.ocp_certs')
+      | lib_utils_oo_collect('health', {'path':hostvars[groups.oo_nodes_to_config.0].openshift.common.config_base ~ "/node/server.crt"}))
   - ('expired' not in hostvars
-      | oo_select_keys(groups['oo_nodes_to_config'])
-      | oo_collect('check_results.check_results.ocp_certs')
-      | oo_collect('health', {'path':hostvars[groups.oo_nodes_to_config.0].openshift.common.config_base ~ "/node/ca.crt"}))
+      | lib_utils_oo_select_keys(groups['oo_nodes_to_config'])
+      | lib_utils_oo_collect('check_results.check_results.ocp_certs')
+      | lib_utils_oo_collect('health', {'path':hostvars[groups.oo_nodes_to_config.0].openshift.common.config_base ~ "/node/client-ca.crt"}))
   # masters
   - ('expired' not in hostvars
-      | oo_select_keys(groups['oo_masters_to_config'])
-      | oo_collect('check_results.check_results.ocp_certs')
-      | oo_collect('health', {'path':hostvars[groups.oo_first_master.0].openshift.common.config_base ~ "/master/master.server.crt"}))
+      | lib_utils_oo_select_keys(groups['oo_masters_to_config'])
+      | lib_utils_oo_collect('check_results.check_results.ocp_certs')
+      | lib_utils_oo_collect('health', {'path':hostvars[groups.oo_first_master.0].openshift.common.config_base ~ "/master/master.server.crt"}))
   - ('expired' not in hostvars
-      | oo_select_keys(groups['oo_masters_to_config'])
-      | oo_collect('check_results.check_results.ocp_certs')
-      | oo_collect('health', {'path':hostvars[groups.oo_first_master.0].openshift.common.config_base ~ "/master/ca-bundle.crt"}))
+      | lib_utils_oo_select_keys(groups['oo_masters_to_config'])
+      | lib_utils_oo_collect('check_results.check_results.ocp_certs')
+      | lib_utils_oo_collect('health', {'path':hostvars[groups.oo_first_master.0].openshift.common.config_base ~ "/master/ca-bundle.crt"}))
   # etcd
   - ('expired' not in (hostvars
-      | oo_select_keys(groups['etcd'])
-      | oo_collect('check_results.check_results.etcd')
-      | oo_collect('health')))
+      | lib_utils_oo_select_keys(groups['etcd'])
+      | lib_utils_oo_collect('check_results.check_results.etcd')
+      | lib_utils_oo_collect('health')))

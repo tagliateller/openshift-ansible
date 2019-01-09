@@ -79,12 +79,14 @@ def entry_from_named_pair(register_pairs, key):
     raise RuntimeError("There was no entry found in the dict that had an item with a name that matched {}".format(key))
 
 
-def map_from_pairs(source, delim="="):
-    ''' Returns a dict given the source and delim delimited '''
-    if source == '':
-        return dict()
-
-    return dict(item.split(delim) for item in source.split(","))
+def entry_from_name_value_pair(key_value_dict, key, key_label='name', value_label='value'):
+    ''' Returns the entry in key given results provided by register_pairs '''
+    for key_value in key_value_dict:
+        name = key_value.get(key_label)
+        if name == key:
+            return key_value[value_label]
+    # pylint: disable=line-too-long, too-few-format-args
+    raise RuntimeError("There was no entry found in the dict that had an item with a name that matched {}:{}".format(key_label).format(key))
 
 
 def serviceaccount_name(qualified_sa):
@@ -102,6 +104,28 @@ def serviceaccount_namespace(qualified_sa, default=None):
     return seg[-1]
 
 
+def flatten_dict(data, parent_key=None):
+    """ This filter plugin will flatten a dict and its sublists into a single dict
+    """
+    if not isinstance(data, dict):
+        raise RuntimeError("flatten_dict failed, expects to flatten a dict")
+
+    merged = dict()
+
+    for key in data:
+        if parent_key is not None:
+            insert_key = '.'.join((parent_key, key))
+        else:
+            insert_key = key
+
+        if isinstance(data[key], dict):
+            merged.update(flatten_dict(data[key], insert_key))
+        else:
+            merged[insert_key] = data[key]
+
+    return merged
+
+
 # pylint: disable=too-few-public-methods
 class FilterModule(object):
     ''' OpenShift Logging Filters '''
@@ -112,10 +136,11 @@ class FilterModule(object):
         return {
             'random_word': random_word,
             'entry_from_named_pair': entry_from_named_pair,
-            'map_from_pairs': map_from_pairs,
+            'entry_from_name_value_pair': entry_from_name_value_pair,
             'min_cpu': min_cpu,
             'es_storage': es_storage,
             'serviceaccount_name': serviceaccount_name,
             'serviceaccount_namespace': serviceaccount_namespace,
-            'walk': walk
+            'walk': walk,
+            "flatten_dict": flatten_dict
         }

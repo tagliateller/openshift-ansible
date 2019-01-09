@@ -3,9 +3,9 @@
 #
 # Include signature
 #
-# include_role:
+# import_role:
 #   role: openshift_nfs
-#   tasks_from: create_export
+#   tasks_from: create_export.yml
 # vars:
 #   l_nfs_base_dir: Base dir to exports
 #   l_nfs_export_config: Name to prefix the .exports file with
@@ -31,4 +31,4 @@
 - name: Re-export NFS filesystems
   command: exportfs -ar
   when:
-    - created_export | changed
+    - created_export is changed

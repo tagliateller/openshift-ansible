@@ -5,6 +5,8 @@ openshift_management_project: openshift-management
 openshift_management_project_description: CloudForms Management Engine
 # Number of retries when waiting for the app to start (retried every 30 seconds)
 openshift_management_pod_rollout_retries: 30
+# Node selector for project:
+openshift_management_nodeselector: "{{ openshift_hosted_infra_selector | default(['node-role.kubernetes.io/infra=true'])}}"
 
 ######################################################################
 # BASE TEMPLATE AND DATABASE OPTIONS
@@ -15,7 +17,7 @@ openshift_management_pod_rollout_retries: 30
 #
 # Choose 'miq-template' for a podified database install
 # Choose 'miq-template-ext-db' for an external database install
-openshift_management_app_template: miq-template
+openshift_management_app_template: "{{ 'cfme-template' if openshift_deployment_type == 'openshift-enterprise' else 'miq-template' }}"
 # If you are using the miq-template-ext-db template then you must add
 # the required database parameters to the
 # openshift_management_template_parameters variable.
@@ -48,8 +50,8 @@ openshift_management_storage_class: nfs
 #   configured the required inventory parameters for your cloud
 #   provider
 #
-#   Ensure 'openshift_cloudprovider_kind' is defined (aws or gce) and
-#   that the applicable cloudprovider parameters are provided.
+#   Ensure 'openshift_cloudprovider_kind' is defined (aws, azure or gce)
+#   and that the applicable cloudprovider parameters are provided.
 
 #---------------------------------------------------------------------
 # STORAGE - NFS OPTIONS
@@ -68,7 +70,7 @@ openshift_management_storage_nfs_external_hostname: false
 #
 # LOCAL NFS NOTE:
 #
-# You may may also change this value if you want to change the default
+# You may also change this value if you want to change the default
 # path used for local NFS exports.
 openshift_management_storage_nfs_base_dir: /exports
 #

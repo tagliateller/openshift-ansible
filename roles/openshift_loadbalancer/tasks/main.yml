@@ -3,34 +3,16 @@
   import_tasks: firewall.yml
 
 - name: Install haproxy
-  package: name=haproxy state=present
-  when: not openshift.common.is_containerized | bool
+  package:
+    name: haproxy
+    state: present
   register: result
-  until: result | success
-
-- name: Pull haproxy image
-  command: >
-    docker pull {{ openshift.common.router_image }}:{{ openshift_image_tag }}
-  when: openshift.common.is_containerized | bool
-
-- name: Create config directory for haproxy
-  file:
-    path: /etc/haproxy
-    state: directory
-  when: openshift.common.is_containerized | bool
-
-- name: Create the systemd unit files
-  template:
-    src: "haproxy.docker.service.j2"
-    dest: "/etc/systemd/system/haproxy.service"
-  when: openshift.common.is_containerized | bool
-  notify: restart haproxy
+  until: result is succeeded
 
 - name: Configure systemd service directory for haproxy
   file:
     path: /etc/systemd/system/haproxy.service.d
     state: directory
-  when: not openshift.common.is_containerized | bool
 
 # Work around ini_file create option in 2.2 which defaults to no
 - name: Create limits.conf file
@@ -41,7 +23,6 @@
     owner: root
     group: root
   changed_when: false
-  when: not openshift.common.is_containerized | bool
 
 - name: Configure the nofile limits for haproxy
   ini_file:
@@ -50,7 +31,6 @@
     option: LimitNOFILE
     value: "{{ openshift_loadbalancer_limit_nofile | default(100000) }}"
   notify: restart haproxy
-  when: not openshift.common.is_containerized | bool
 
 - name: Configure haproxy
   template:
@@ -70,4 +50,4 @@
   register: start_result
 
 - set_fact:
-    haproxy_start_result_changed: "{{ start_result | changed }}"
+    haproxy_start_result_changed: "{{ start_result is changed }}"

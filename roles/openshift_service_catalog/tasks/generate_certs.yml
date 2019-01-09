@@ -12,7 +12,7 @@
 
 - name: Generate signing cert
   command: >
-    {{ openshift.common.client_binary }} adm --config=/etc/origin/master/admin.kubeconfig ca create-signer-cert
+    {{ openshift_client_binary }} adm --config=/etc/origin/master/admin.kubeconfig ca create-signer-cert
     --key={{ generated_certs_dir }}/ca.key --cert={{ generated_certs_dir }}/ca.crt
     --serial={{ generated_certs_dir }}/apiserver.serial.txt --name=service-catalog-signer
 
@@ -26,7 +26,7 @@
     path: "{{ generated_certs_dir }}/apiserver.key"
     state: absent
 
-- name: Generating server keys
+- name: Generating API Server keys
   oc_adm_ca_server_cert:
     cert: "{{ generated_certs_dir }}/apiserver.crt"
     key: "{{ generated_certs_dir }}/apiserver.key"
@@ -46,23 +46,9 @@
     - name: tls.key
       path: "{{ generated_certs_dir }}/apiserver.key"
 
-- name: Create service-catalog-ssl secret
-  oc_secret:
-    state: present
-    name: service-catalog-ssl
-    namespace: kube-service-catalog
-    files:
-    - name: tls.crt
-      path: "{{ generated_certs_dir }}/apiserver.crt"
-
 - slurp:
     src: "{{ generated_certs_dir }}/ca.crt"
   register: apiserver_ca
-
-- shell: >
-    {{ openshift.common.client_binary }} --config=/etc/origin/master/admin.kubeconfig get apiservices.apiregistration.k8s.io/v1beta1.servicecatalog.k8s.io -n kube-service-catalog || echo "not found"
-  register: get_apiservices
-  changed_when: no
 
 - name: Create api service
   oc_obj:
@@ -86,4 +72,3 @@
           caBundle: "{{ apiserver_ca.content }}"
           groupPriorityMinimum: 20
           versionPriority: 10
-  when: "'not found' in get_apiservices.stdout"

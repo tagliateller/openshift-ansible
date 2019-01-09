@@ -38,7 +38,8 @@ LOGGING_INFRA_KEY = "logging-infra"
 DS_FLUENTD_SELECTOR = LOGGING_INFRA_KEY + "=" + "fluentd"
 LOGGING_SELECTOR = LOGGING_INFRA_KEY + "=" + "support"
 ROUTE_SELECTOR = "component=support,logging-infra=support,provider=openshift"
-COMPONENTS = ["kibana", "curator", "elasticsearch", "fluentd", "kibana_ops", "curator_ops", "elasticsearch_ops"]
+# pylint: disable=line-too-long
+COMPONENTS = ["kibana", "curator", "elasticsearch", "fluentd", "kibana_ops", "curator_ops", "elasticsearch_ops", "mux", "eventrouter"]
 
 
 class OCBaseCommand(object):
@@ -75,6 +76,7 @@ class OCBaseCommand(object):
         try:
             process = Popen(cmd, stdout=PIPE, stderr=PIPE)   # noqa: F405
             out, err = process.communicate(cmd)
+            err = err.decode(encoding='utf8', errors='replace')
             if len(err) > 0:
                 if 'not found' in err:
                     return {'items': []}
@@ -136,15 +138,15 @@ class OpenshiftLoggingFacts(OCBaseCommand):
             name = ds_item["metadata"]["name"]
             comp = self.comp(name)
             spec = ds_item["spec"]["template"]["spec"]
-            container = spec["containers"][0]
             result = dict(
                 selector=ds_item["spec"]["selector"],
-                image=container["image"],
-                resources=container["resources"],
+                containers=dict(),
                 nodeSelector=spec["nodeSelector"],
                 serviceAccount=spec["serviceAccount"],
                 terminationGracePeriodSeconds=spec["terminationGracePeriodSeconds"]
             )
+            for container in spec["containers"]:
+                result["containers"][container["name"]] = container
             self.add_facts_for(comp, "daemonsets", name, result)
 
     def facts_for_pvcs(self, namespace):
@@ -204,6 +206,15 @@ class OpenshiftLoggingFacts(OCBaseCommand):
             if comp is not None:
                 self.add_facts_for(comp, "services", name, dict())
 
+    # pylint: disable=too-many-arguments
+    def facts_from_configmap(self, comp, kind, name, config_key, yaml_file=None):
+        '''Extracts facts in logging namespace from configmap'''
+        if yaml_file is not None:
+            if config_key.endswith(".yml") or config_key.endswith(".yaml"):
+                config_facts = yaml.load(yaml_file)
+                self.facts[comp][kind][name][config_key] = config_facts
+                self.facts[comp][kind][name][config_key]["raw"] = yaml_file
+
     def facts_for_configmaps(self, namespace):
         ''' Gathers facts for configmaps in logging namespace '''
         self.default_keys_for("configmaps")
@@ -214,7 +225,10 @@ class OpenshiftLoggingFacts(OCBaseCommand):
             name = item["metadata"]["name"]
             comp = self.comp(name)
             if comp is not None:
-                self.add_facts_for(comp, "configmaps", name, item["data"])
+                self.add_facts_for(comp, "configmaps", name, dict(item["data"]))
+                if comp in ["elasticsearch", "elasticsearch_ops"]:
+                    for config_key in item["data"]:
+                        self.facts_from_configmap(comp, "configmaps", name, config_key, item["data"][config_key])
 
     def facts_for_oauthclients(self, namespace):
         ''' Gathers facts for oauthclients used with logging '''
@@ -249,7 +263,7 @@ class OpenshiftLoggingFacts(OCBaseCommand):
     def facts_for_sccs(self):
         ''' Gathers facts for SCCs used with logging '''
         self.default_keys_for("sccs")
-        scc = self.oc_command("get", "scc", name="privileged")
+        scc = self.oc_command("get", "securitycontextconstraints.v1.security.openshift.io", name="privileged")
         if len(scc["users"]) == 0:
             return
         for item in scc["users"]:
@@ -265,7 +279,7 @@ class OpenshiftLoggingFacts(OCBaseCommand):
             return
         for item in role["subjects"]:
             comp = self.comp(item["name"])
-            if comp is not None and namespace == item["namespace"]:
+            if comp is not None and namespace == item.get("namespace"):
                 self.add_facts_for(comp, "clusterrolebindings", "cluster-readers", dict())
 
 # this needs to end up nested under the service account...
@@ -277,7 +291,7 @@ class OpenshiftLoggingFacts(OCBaseCommand):
             return
         for item in role["subjects"]:
             comp = self.comp(item["name"])
-            if comp is not None and namespace == item["namespace"]:
+            if comp is not None and namespace == item.get("namespace"):
                 self.add_facts_for(comp, "rolebindings", "logging-elasticsearch-view-role", dict())
 
     # pylint: disable=no-self-use, too-many-return-statements
@@ -297,6 +311,10 @@ class OpenshiftLoggingFacts(OCBaseCommand):
             return "elasticsearch"
         elif name.startswith("logging-fluentd") or name.endswith("aggregated-logging-fluentd"):
             return "fluentd"
+        elif name.startswith("logging-mux"):
+            return "mux"
+        elif name.startswith("logging-eventrouter"):
+            return "eventrouter"
         else:
             return None
 

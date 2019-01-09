@@ -3,9 +3,11 @@
   import_tasks: firewall.yml
 
 - name: Install nfs-utils
-  package: name=nfs-utils state=present
+  package:
+    name: nfs-utils
+    state: present
   register: result
-  until: result | success
+  until: result is succeeded
 
 - name: Configure NFS
   lineinfile:
@@ -16,7 +18,7 @@
 
 - name: Restart nfs-config
   systemd: name=nfs-config state=restarted
-  when: nfs_config | changed
+  when: nfs_config is changed
 
 - name: Ensure exports directory exists
   file:

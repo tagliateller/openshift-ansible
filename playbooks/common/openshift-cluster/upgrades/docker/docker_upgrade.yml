@@ -7,20 +7,34 @@
 
 - import_playbook: ../initialize_nodes_to_upgrade.yml
 
+- import_playbook: ../../../../init/basic_facts.yml
+  vars:
+    l_init_fact_hosts: "oo_masters_to_config:oo_etcd_to_config:oo_lb_to_config:oo_nodes_to_upgrade"
+
+- import_playbook: ../../../../init/cluster_facts.yml
+  vars:
+    l_init_fact_hosts: "oo_masters_to_config:oo_etcd_to_config:oo_lb_to_config:oo_nodes_to_upgrade"
+
+# We need version for sanity_checks, but we don't need to actually check if
+# packages/images are available because we're not install any origin components.
+- import_playbook: ../../../../init/version.yml
+  vars:
+    l_openshift_version_set_hosts: "oo_etcd_to_config:oo_nodes_to_upgrade:oo_masters_to_config:!oo_first_master"
+
+# Ensure inventory sanity_checks are run.
+- import_playbook: ../../../../init/sanity_checks.yml
+  vars:
+    l_sanity_check_hosts: "{{ groups['oo_nodes_to_upgrade'] | union(groups['oo_masters_to_config']) | union(groups['oo_etcd_to_config']) }}"
+
 - name: Check for appropriate Docker versions
   hosts: oo_masters_to_config:oo_nodes_to_upgrade:oo_etcd_to_config
   roles:
   - openshift_facts
   tasks:
-  - set_fact:
-      repoquery_cmd: "{{ 'dnf repoquery --latest-limit 1 -d 0' if ansible_pkg_mgr == 'dnf' else 'repoquery --plugins' }}"
-
-  - fail:
-      msg: Cannot upgrade Docker on Atomic operating systems.
-    when: openshift.common.is_atomic | bool
-
-  - include_tasks: upgrade_check.yml
-    when: docker_upgrade is not defined or docker_upgrade | bool
+  - import_role:
+      name: container_runtime
+      tasks_from: docker_upgrade_check.yml
+    when: docker_upgrade | default(True) | bool
 
 
 # If a node fails, halt everything, the admin will need to clean up and we
@@ -32,18 +46,19 @@
   any_errors_fatal: true
 
   roles:
+  - openshift_facts
   - lib_openshift
 
   tasks:
   - name: Mark node unschedulable
     oc_adm_manage_node:
-      node: "{{ openshift.node.nodename | lower }}"
+      node: "{{ l_kubelet_node_name | lower }}"
       schedulable: False
     delegate_to: "{{ groups.oo_first_master.0 }}"
     retries: 10
     delay: 5
     register: node_unschedulable
-    until: node_unschedulable|succeeded
+    until: node_unschedulable is succeeded
     when:
     - l_docker_upgrade is defined
     - l_docker_upgrade | bool
@@ -51,24 +66,35 @@
 
   - name: Drain Node for Kubelet upgrade
     command: >
-      {{ openshift.common.client_binary }} adm drain {{ openshift.node.nodename }} --config={{ openshift.common.config_base }}/master/admin.kubeconfig --force --delete-local-data --ignore-daemonsets
+      {{ hostvars[groups.oo_first_master.0]['first_master_client_binary'] }} adm drain {{ l_kubelet_node_name | lower }}
+      --config={{ openshift.common.config_base }}/master/admin.kubeconfig
+      --force --delete-local-data --ignore-daemonsets
+      --timeout={{ openshift_upgrade_nodes_drain_timeout | default(0) }}s
     delegate_to: "{{ groups.oo_first_master.0 }}"
-    when: l_docker_upgrade is defined and l_docker_upgrade | bool and inventory_hostname in groups.oo_nodes_to_upgrade
+    when:
+    - l_docker_upgrade is defined
+    - l_docker_upgrade | bool
+    - inventory_hostname in groups.oo_nodes_to_upgrade
     register: l_docker_upgrade_drain_result
-    until: not l_docker_upgrade_drain_result | failed
-    retries: 60
-    delay: 60
+    until: not (l_docker_upgrade_drain_result is failed)
+    retries: "{{ 1 if ( openshift_upgrade_nodes_drain_timeout | default(0) | int ) == 0 else 0 }}"
+    delay: 5
+    failed_when:
+    - l_docker_upgrade_drain_result is failed
+    - openshift_upgrade_nodes_drain_timeout | default(0) | int == 0
 
-  - include_tasks: tasks/upgrade.yml
-    when: l_docker_upgrade is defined and l_docker_upgrade | bool
+  - import_tasks: tasks/upgrade.yml
+    when:
+    - l_docker_upgrade is defined
+    - l_docker_upgrade | bool
 
   - name: Set node schedulability
     oc_adm_manage_node:
-      node: "{{ openshift.node.nodename | lower }}"
+      node: "{{ l_kubelet_node_name | lower }}"
       schedulable: True
     delegate_to: "{{ groups.oo_first_master.0 }}"
     retries: 10
     delay: 5
     register: node_schedulable
-    until: node_schedulable|succeeded
-    when: node_unschedulable|changed
+    until: node_schedulable is succeeded
+    when: node_unschedulable is changed

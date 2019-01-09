@@ -7,9 +7,18 @@ items:
   kind: "PersistentVolumeClaim"
   metadata:
     name: "{{ claim.name }}"
+{% if claim.annotations %}
+    annotations:
+{% for annotation in claim.annotations %}
+        {{ annotation }}
+{% endfor %}
+{% endif %}
   spec:
-    accessModes: {{ claim.access_modes | to_padded_yaml(2, 2) }}
+    accessModes: {{ claim.access_modes | lib_utils_to_padded_yaml(2, 2) }}
     resources:
       requests:
         storage: "{{ claim.capacity }}"
+{% if claim.storageclass is not none %}
+    storageClassName: "{{ claim.storageclass }}"
+{% endif %}
 {% endfor %}

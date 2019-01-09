@@ -14,6 +14,8 @@ spec:
     type: RollingUpdate
   template:
     metadata:
+      annotations:
+        ca_hash: {{ ca_hash }}
       labels:
         app: apiserver
     spec:
@@ -38,16 +40,20 @@ spec:
         - --etcd-keyfile
         - /etc/origin/master/master.etcd-client.key
         - -v
-        - "10"
+        - "3"
         - --cors-allowed-origins
         - {{ cors_allowed_origin }}
-        - --admission-control
-        - KubernetesNamespaceLifecycle,DefaultServicePlan,ServiceBindingsLifecycle,ServicePlanChangeValidator,BrokerAuthSarCheck
+        - --enable-admission-plugins
+        - NamespaceLifecycle,DefaultServicePlan,ServiceBindingsLifecycle,ServicePlanChangeValidator,BrokerAuthSarCheck
         - --feature-gates
         - OriginatingIdentity=true
-        image: {{ openshift_service_catalog_image_prefix }}service-catalog:{{ openshift_service_catalog_image_version }}
+{% if openshift_service_catalog_namespaced_service_brokers_enabled | bool %}
+        - --feature-gates
+        - NamespacedServiceBroker=true
+{% endif %}
+        image: {{ openshift_service_catalog_image }}
         command: ["/usr/bin/service-catalog"]
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         name: apiserver
         ports:
         - containerPort: 6443

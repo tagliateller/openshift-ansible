@@ -1,4 +1,25 @@
-# This is an example of an OpenShift-Ansible host inventory
+# This is an example of an OpenShift-Ansible host inventory that provides the
+# minimum recommended configuration for production use. This includes 3 masters,
+# two infra nodes, two compute nodes, and an haproxy load balancer to load
+# balance traffic to the API servers. For a truly production environment you
+# should use an external load balancing solution that itself is highly available.
+
+[masters]
+ose3-master[1:3].test.example.com
+
+[etcd]
+ose3-master[1:3].test.example.com
+
+[nodes]
+ose3-master[1:3].test.example.com
+ose3-infra[1:2].test.example.com
+ose3-node[1:2].test.example.com
+
+[nfs]
+ose3-master1.test.example.com
+
+[lb]
+ose3-lb.test.example.com
 
 # Create an OSEv3 group that contains the masters and nodes groups
 [OSEv3:children]
@@ -8,12 +29,10 @@ etcd
 lb
 nfs
 
-# Set variables common for all OSEv3 hosts
 [OSEv3:vars]
-# Enable unsupported configurations, things that will yield a partially
-# functioning cluster but would not be supported for production use
-#openshift_enable_unsupported_configurations=false
-
+###############################################################################
+# Common/ Required configuration variables follow                             #
+###############################################################################
 # SSH user, this user should allow ssh based auth without requiring a
 # password. If using ssh key based auth, then the key should be managed by an
 # ssh agent.
@@ -22,9 +41,6 @@ ansible_user=root
 # If ansible_user is not root, ansible_become must be set to true and the
 # user must be configured for passwordless sudo
 #ansible_become=yes
-
-# Debug level for all OpenShift components (Defaults to 2)
-debug_level=2
 
 # Specify the deployment type. Valid values are origin and openshift-enterprise.
 openshift_deployment_type=origin
@@ -35,60 +51,58 @@ openshift_deployment_type=origin
 # use this to lookup the latest exact version of the container images, which is the tag actually used to configure
 # the cluster. For RPM installations we just verify the version detected in your configured repos matches this
 # release.
-openshift_release=v3.7
+#openshift_release="3.11"
+
+# default subdomain to use for exposed routes, you should have wildcard dns
+# for *.apps.test.example.com that points at your infra nodes which will run
+# your router
+openshift_master_default_subdomain=apps.test.example.com
+
+#Set cluster_hostname to point at your load balancer
+openshift_master_cluster_hostname=ose3-lb.test.example.com
+
+
+
+###############################################################################
+# Additional configuration variables follow                                   #
+###############################################################################
+
+# Debug level for all OpenShift components (Defaults to 2)
+debug_level=2
 
 # Specify an exact container image tag to install or configure.
 # WARNING: This value will be used for all hosts in containerized environments, even those that have another version installed.
 # This could potentially trigger an upgrade and downtime, so be careful with modifying this value after the cluster is set up.
-#openshift_image_tag=v3.7.0
+#openshift_image_tag=v3.11.0
 
 # Specify an exact rpm version to install or configure.
 # WARNING: This value will be used for all hosts in RPM based environments, even those that have another version installed.
 # This could potentially trigger an upgrade and downtime, so be careful with modifying this value after the cluster is set up.
-#openshift_pkg_version=-3.7.0
+#openshift_pkg_version=-3.11.0
 
-# This enables all the system containers except for docker:
-#openshift_use_system_containers=False
-#
-# But you can choose separately each component that must be a
-# system container:
-#
-#openshift_use_openvswitch_system_container=False
-#openshift_use_node_system_container=False
-#openshift_use_master_system_container=False
-#openshift_use_etcd_system_container=False
-#
-# In either case, system_images_registry must be specified to be able to find the system images
+# If using Atomic Host, you may specify system container image registry for the nodes:
 #system_images_registry="docker.io"
 # when openshift_deployment_type=='openshift-enterprise'
-#system_images_registry="registry.access.redhat.com"
+#system_images_registry="registry.redhat.io"
 
 # Manage openshift example imagestreams and templates during install and upgrade
 #openshift_install_examples=true
 
 # Configure logoutURL in the master config for console customization
-# See: https://docs.openshift.org/latest/install_config/web_console_customization.html#changing-the-logout-url
+# See: https://docs.okd.io/latest/install_config/web_console_customization.html#changing-the-logout-url
 #openshift_master_logout_url=http://example.com
 
-# Configure extensionScripts in the master config for console customization
-# See: https://docs.openshift.org/latest/install_config/web_console_customization.html#loading-custom-scripts-and-stylesheets
-#openshift_master_extension_scripts=['/path/to/script1.js','/path/to/script2.js']
-
-# Configure extensionStylesheets in the master config for console customization
-# See: https://docs.openshift.org/latest/install_config/web_console_customization.html#loading-custom-scripts-and-stylesheets
-#openshift_master_extension_stylesheets=['/path/to/stylesheet1.css','/path/to/stylesheet2.css']
-
 # Configure extensions in the master config for console customization
-# See: https://docs.openshift.org/latest/install_config/web_console_customization.html#serving-static-files
-#openshift_master_extensions=[{'name': 'images', 'sourceDirectory': '/path/to/my_images'}]
-
-# Configure extensions in the master config for console customization
-# See: https://docs.openshift.org/latest/install_config/web_console_customization.html#serving-static-files
+# See: https://docs.okd.io/latest/install_config/web_console_customization.html#serving-static-files
+#openshift_master_oauth_templates={'login': '/path/to/login-template.html'}
+# openshift_master_oauth_template is deprecated.  Use openshift_master_oauth_templates instead.
 #openshift_master_oauth_template=/path/to/login-template.html
 
 # Configure imagePolicyConfig in the master config
-# See: https://godoc.org/github.com/openshift/origin/pkg/cmd/server/api#ImagePolicyConfig
+# See: https://docs.okd.io/latest/admin_guide/image_policy.html
 #openshift_master_image_policy_config={"maxImagesBulkImportedPerRepository": 3, "disableScheduledImport": true}
+# This setting overrides allowedRegistriesForImport in openshift_master_image_policy_config. By default, all registries are allowed.
+#openshift_master_image_policy_allowed_registries_for_import=["docker.io", "*.docker.io", "*.redhat.com", "gcr.io", "quay.io", "registry.centos.org", "registry.redhat.io", "*.amazonaws.com"]
 
 # Configure master API rate limits for external clients
 #openshift_master_external_ratelimit_qps=200
@@ -97,40 +111,17 @@ openshift_release=v3.7
 #openshift_master_loopback_ratelimit_qps=300
 #openshift_master_loopback_ratelimit_burst=600
 
-# Docker Configuration
-# Add additional, insecure, and blocked registries to global docker configuration
-# For enterprise deployment types we ensure that registry.access.redhat.com is
-# included if you do not include it
-#openshift_docker_additional_registries=registry.example.com
-#openshift_docker_insecure_registries=registry.example.com
-#openshift_docker_blocked_registries=registry.hacker.com
-# Disable pushing to dockerhub
-#openshift_docker_disable_push_dockerhub=True
-# Use Docker inside a System Container. Note that this is a tech preview and should
-# not be used to upgrade!
-# The following options for docker are ignored:
-# - docker_version
-# - docker_upgrade
-# The following options must not be used
-# - openshift_docker_options
-#openshift_docker_use_system_container=False
-# Install and run cri-o along side docker
-# NOTE: This uses openshift_docker_systemcontainer_image_registry_override as it's override
-# just as container-engine does.
+# Install and run cri-o.
 #openshift_use_crio=False
-# Force the registry to use for the container-engine/crio system container. By default the registry
-# will be built off of the deployment type and ansible_distribution. Only
-# use this option if you are sure you know what you are doing!
-#openshift_docker_systemcontainer_image_override="registry.example.com/container-engine:latest"
-#openshift_crio_systemcontainer_image_override="registry.example.com/cri-o:latest"
-# NOTE: The following crio docker-gc items are tech preview and likely shouldn't be used
-# unless you know what you are doing!!
-# The following two variables are used when opneshift_use_crio is True
-# and cleans up after builds that pass through docker.
+#openshift_use_crio_only=False
+# The following two variables are used when openshift_use_crio is True
+# and cleans up after builds that pass through docker. When openshift_use_crio is True
+# these variables are set to the defaults shown. You may override them here.
+# NOTE: You will still need to tag crio nodes with your given label(s)!
 # Enable docker garbage collection when using cri-o
-#openshift_crio_enable_docker_gc=false
+#openshift_crio_enable_docker_gc=False
 # Node Selectors to run the garbage collection
-#openshift_crio_docker_gc_node_selector: {'runtime': 'cri-o'}
+#openshift_crio_docker_gc_node_selector={'runtime': 'cri-o'}
 
 # Items added, as is, to end of /etc/sysconfig/docker OPTIONS
 # Default value: "--log-driver=journald"
@@ -148,12 +139,18 @@ openshift_release=v3.7
 # Skip upgrading Docker during an OpenShift upgrade, leaves the current Docker version alone.
 # docker_upgrade=False
 
-# Specify exact version of etcd to configure or upgrade to.
-# etcd_version="3.1.0"
+# Specify a list of block devices to be formatted and mounted on the nodes
+# during prerequisites.yml. For each hash, "device", "path", "filesystem" are
+# required. To add devices only on certain classes of node, redefine
+# container_runtime_extra_storage as a group var.
+#container_runtime_extra_storage='[{"device":"/dev/vdc","path":"/var/lib/origin/openshift.local.volumes","filesystem":"xfs","options":"gquota"}]'
+
 # Enable etcd debug logging, defaults to false
 # etcd_debug=true
 # Set etcd log levels by package
 # etcd_log_package_levels="etcdserver=WARNING,security=DEBUG"
+# Comma-separated list of etcd cipher suites
+# etcd_cipher_suites="TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
 
 # Upgrade Hooks
 #
@@ -172,30 +169,36 @@ openshift_release=v3.7
 # Tasks to run after each master is upgraded and system/services have been restarted.
 # openshift_master_upgrade_post_hook=/usr/share/custom/post_master.yml
 
-# Alternate image format string, useful if you've got your own registry mirror
-# Configure this setting just on node or master
-#oreg_url_master=example.com/openshift3/ose-${component}:${version}
-#oreg_url_node=example.com/openshift3/ose-${component}:${version}
-# For setting the configuration globally
+# Cluster Image Source (registry) configuration
+# openshift-enterprise default is 'registry.redhat.io/openshift3/ose-${component}:${version}'
+# origin default is 'docker.io/openshift/origin-${component}:${version}'
 #oreg_url=example.com/openshift3/ose-${component}:${version}
-# If oreg_url points to a registry other than registry.access.redhat.com we can
+# If oreg_url points to a registry other than registry.redhat.io we can
 # modify image streams to point at that registry by setting the following to true
 #openshift_examples_modify_imagestreams=true
+# Add insecure and blocked registries to global docker configuration
+#openshift_docker_insecure_registries=registry.example.com
+#openshift_docker_blocked_registries=registry.hacker.com
+# You may also configure additional default registries for docker, however this
+# is discouraged. Instead you should make use of fully qualified image names.
+#openshift_docker_additional_registries=registry.example.com
 
 # If oreg_url points to a registry requiring authentication, provide the following:
 #oreg_auth_user=some_user
 #oreg_auth_password='my-pass'
 # NOTE: oreg_url must be defined by the user for oreg_auth_* to have any affect.
 # oreg_auth_pass should be generated from running docker login.
-# To update registry auth credentials, uncomment the following:
-#oreg_auth_credentials_replace: True
 
 # OpenShift repository configuration
 #openshift_additional_repos=[{'id': 'openshift-origin-copr', 'name': 'OpenShift Origin COPR', 'baseurl': 'https://copr-be.cloud.fedoraproject.org/results/maxamillion/origin-next/epel-7-$basearch/', 'enabled': 1, 'gpgcheck': 1, 'gpgkey': 'https://copr-be.cloud.fedoraproject.org/results/maxamillion/origin-next/pubkey.gpg'}]
 #openshift_repos_enable_testing=false
 
+# If the image for etcd needs to be pulled from anywhere else than registry.redhat.io, e.g. in
+# a disconnected and containerized installation, use osm_etcd_image to specify the image to use:
+#osm_etcd_image=registry.example.com/rhel7/etcd
+
 # htpasswd auth
-openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 'challenge': 'true', 'kind': 'HTPasswdPasswordIdentityProvider', 'filename': '/etc/origin/master/htpasswd'}]
+#openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 'challenge': 'true', 'kind': 'HTPasswdPasswordIdentityProvider'}]
 # Defining htpasswd users
 #openshift_master_htpasswd_users={'user1': '<pre-hashed password>', 'user2': '<pre-hashed password>'}
 # or
@@ -205,7 +208,7 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_master_identity_providers=[{'name': 'allow_all', 'login': 'true', 'challenge': 'true', 'kind': 'AllowAllPasswordIdentityProvider'}]
 
 # LDAP auth
-#openshift_master_identity_providers=[{'name': 'my_ldap_provider', 'challenge': 'true', 'login': 'true', 'kind': 'LDAPPasswordIdentityProvider', 'attributes': {'id': ['dn'], 'email': ['mail'], 'name': ['cn'], 'preferredUsername': ['uid']}, 'bindDN': '', 'bindPassword': '', 'ca': 'my-ldap-ca.crt', 'insecure': 'false', 'url': 'ldap://ldap.example.com:389/ou=users,dc=example,dc=com?uid'}]
+#openshift_master_identity_providers=[{'name': 'my_ldap_provider', 'challenge': 'true', 'login': 'true', 'kind': 'LDAPPasswordIdentityProvider', 'attributes': {'id': ['dn'], 'email': ['mail'], 'name': ['cn'], 'preferredUsername': ['uid']}, 'bindDN': '', 'bindPassword': '', 'insecure': 'false', 'url': 'ldap://ldap.example.com:389/ou=users,dc=example,dc=com?uid'}]
 #
 # Configure LDAP CA certificate
 # Specify either the ASCII contents of the certificate or the path to
@@ -219,7 +222,7 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_master_ldap_ca_file=<path to local ca file to use>
 
 # OpenID auth
-#openshift_master_identity_providers=[{"name": "openid_auth", "login": "true", "challenge": "false", "kind": "OpenIDIdentityProvider", "client_id": "my_client_id", "client_secret": "my_client_secret", "claims": {"id": ["sub"], "preferredUsername": ["preferred_username"], "name": ["name"], "email": ["email"]}, "urls": {"authorize": "https://myidp.example.com/oauth2/authorize", "token": "https://myidp.example.com/oauth2/token"}, "ca": "my-openid-ca-bundle.crt"}]
+#openshift_master_identity_providers=[{"name": "openid_auth", "login": "true", "challenge": "false", "kind": "OpenIDIdentityProvider", "client_id": "my_client_id", "client_secret": "my_client_secret", "claims": {"id": ["sub"], "preferredUsername": ["preferred_username"], "name": ["name"], "email": ["email"]}, "urls": {"authorize": "https://myidp.example.com/oauth2/authorize", "token": "https://myidp.example.com/oauth2/token"}]
 #
 # Configure OpenID CA certificate
 # Specify either the ASCII contents of the certificate or the path to
@@ -233,7 +236,7 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_master_openid_ca_file=<path to local ca file to use>
 
 # Request header auth
-#openshift_master_identity_providers=[{"name": "my_request_header_provider", "challenge": "true", "login": "true", "kind": "RequestHeaderIdentityProvider", "challengeURL": "https://www.example.com/challenging-proxy/oauth/authorize?${query}", "loginURL": "https://www.example.com/login-proxy/oauth/authorize?${query}", "clientCA": "my-request-header-ca.crt", "clientCommonNames": ["my-auth-proxy"], "headers": ["X-Remote-User", "SSO-User"], "emailHeaders": ["X-Remote-User-Email"], "nameHeaders": ["X-Remote-User-Display-Name"], "preferredUsernameHeaders": ["X-Remote-User-Login"]}]
+#openshift_master_identity_providers=[{"name": "my_request_header_provider", "challenge": "true", "login": "true", "kind": "RequestHeaderIdentityProvider", "challengeURL": "https://www.example.com/challenging-proxy/oauth/authorize?${query}", "loginURL": "https://www.example.com/login-proxy/oauth/authorize?${query}", "clientCommonNames": ["my-auth-proxy"], "headers": ["X-Remote-User", "SSO-User"], "emailHeaders": ["X-Remote-User-Email"], "nameHeaders": ["X-Remote-User-Display-Name"], "preferredUsernameHeaders": ["X-Remote-User-Login"]}]
 #
 # Configure request header CA certificate
 # Specify either the ASCII contents of the certificate or the path to
@@ -245,6 +248,20 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_master_request_header_ca=<ca text>
 # or
 #openshift_master_request_header_ca_file=<path to local ca file to use>
+
+# GitHub auth
+#openshift_master_identity_providers=[{"name": "github", "login": "true", "challenge": "false", "kind": "GitHubIdentityProvider", "mappingMethod": "claim", "client_id": "my_client_id", "client_secret": "my_client_secret", "teams": ["team1", "team2"], "hostname": "githubenterprise.example.com", "ca": "" }]
+#
+# Configure github CA certificate
+# Specify either the ASCII contents of the certificate or the path to
+# the local file that will be copied to the remote host. CA
+# certificate contents will be copied to master systems and saved
+# within /etc/origin/master/ with a filename matching the "ca" key set
+# within the GitHubIdentityProvider.
+#
+#openshift_master_github_ca=<ca text>
+# or
+#openshift_master_github_ca_file=<path to local ca file to use>
 
 # CloudForms Management Engine (ManageIQ) App Install
 #
@@ -279,8 +296,32 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_cloudprovider_openstack_region=region
 #openshift_cloudprovider_openstack_lb_subnet_id=subnet_id
 #
+# Note: If you're getting a "BS API version autodetection failed" when provisioning cinder volumes you may need this setting
+#openshift_cloudprovider_openstack_blockstorage_version=v2
+#
 # GCE
 #openshift_cloudprovider_kind=gce
+# Note: When using GCE, openshift_gcp_project and openshift_gcp_prefix must be
+# defined.
+# openshift_gcp_project is the project-id
+#openshift_gcp_project=
+# openshift_gcp_prefix is a unique string to identify each openshift cluster.
+#openshift_gcp_prefix=
+#openshift_gcp_multizone=False
+# Note: To enable nested virtualization in gcp use the following variable and url
+#openshift_gcp_licenses="https://www.googleapis.com/compute/v1/projects/vm-options/global/licenses/enable-vmx"
+# Additional details regarding nested virtualization are available:
+# https://cloud.google.com/compute/docs/instances/enable-nested-virtualization-vm-instances
+#
+# vSphere
+#openshift_cloudprovider_kind=vsphere
+#openshift_cloudprovider_vsphere_username=username
+#openshift_cloudprovider_vsphere_password=password
+#openshift_cloudprovider_vsphere_host=vcenter_host or vsphere_host
+#openshift_cloudprovider_vsphere_datacenter=datacenter
+#openshift_cloudprovider_vsphere_datastore=datastore
+#openshift_cloudprovider_vsphere_folder=optional_folder_name
+
 
 # Project Configuration
 #osm_project_request_message=''
@@ -305,16 +346,16 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 # or to one or all of the masters defined in the inventory if no load
 # balancer is present.
 #openshift_master_cluster_hostname=openshift-ansible.test.example.com
-#openshift_master_cluster_public_hostname=openshift-ansible.test.example.com
+
+# If an external load balancer is used public hostname should resolve to
+# external load balancer address
+#openshift_master_cluster_public_hostname=openshift-ansible.public.example.com
 
 # Configure controller arguments
 #osm_controller_args={'resource-quota-sync-period': ['10s']}
 
 # Configure api server arguments
 #osm_api_server_args={'max-requests-inflight': ['400']}
-
-# default subdomain to use for exposed routes
-#openshift_master_default_subdomain=apps.test.example.com
 
 # additional cors origins
 #osm_custom_cors_origins=['foo.example.com', 'bar.example.com']
@@ -349,22 +390,26 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #
 # An OpenShift router will be created during install if there are
 # nodes present with labels matching the default router selector,
-# "region=infra". Set openshift_node_labels per node as needed in
-# order to label nodes.
+# "node-role.kubernetes.io/infra=true".
 #
 # Example:
 # [nodes]
-# node.example.com openshift_node_labels="{'region': 'infra'}"
+# node.example.com openshift_node_group_name="node-config-infra"
 #
 # Router selector (optional)
 # Router will only be created if nodes matching this label are present.
-# Default value: 'region=infra'
-#openshift_hosted_router_selector='region=infra'
+# Default value: 'node-role.kubernetes.io/infra=true'
+#openshift_hosted_router_selector='node-role.kubernetes.io/infra=true'
 #
 # Router replicas (optional)
 # Unless specified, openshift-ansible will calculate the replica count
 # based on the number of nodes matching the openshift router selector.
 #openshift_hosted_router_replicas=2
+#
+# Router extended route validation (optional)
+# If enabled, openshift-ansible will configure the router to perform extended
+# validation on routes before admitting them.
+#openshift_hosted_router_extended_validation=true
 #
 # Router force subdomain (optional)
 # A router path format to force on all routes used by this router
@@ -400,17 +445,16 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #
 # An OpenShift registry will be created during install if there are
 # nodes present with labels matching the default registry selector,
-# "region=infra". Set openshift_node_labels per node as needed in
-# order to label nodes.
+# "node-role.kubernetes.io/infra=true".
 #
 # Example:
 # [nodes]
-# node.example.com openshift_node_labels="{'region': 'infra'}"
+# node.example.com openshift_node_group_name="node-config-infra"
 #
 # Registry selector (optional)
 # Registry will only be created if nodes matching this label are present.
-# Default value: 'region=infra'
-#openshift_hosted_registry_selector='region=infra'
+# Default value: 'node-role.kubernetes.io/infra=true'
+#openshift_hosted_registry_selector='node-role.kubernetes.io/infra=true'
 #
 # Registry replicas (optional)
 # Unless specified, openshift-ansible will calculate the replica count
@@ -422,7 +466,9 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #
 # Manage the OpenShift Registry (optional)
 #openshift_hosted_manage_registry=true
-
+# Manage the OpenShift Registry Console (optional)
+#openshift_hosted_manage_registry_console=true
+#
 # Registry Storage Options
 #
 # NFS Host Group
@@ -463,6 +509,14 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_hosted_registry_storage_openstack_volumeID=3a650b4f-c8c5-4e0a-8ca5-eaee11f16c57
 #openshift_hosted_registry_storage_volume_size=10Gi
 #
+# hostPath (local filesystem storage)
+# Suitable for "all-in-one" or proof of concept deployments
+# Must not be used for high-availability and production deployments
+#openshift_hosted_registry_storage_kind=hostpath
+#openshift_hosted_registry_storage_access_modes=['ReadWriteOnce']
+#openshift_hosted_registry_storage_hostpath_path=/var/lib/openshift_volumes
+#openshift_hosted_registry_storage_volume_size=10Gi
+#
 # AWS S3
 # S3 bucket must already exist.
 #openshift_hosted_registry_storage_kind=object
@@ -500,12 +554,28 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_hosted_registry_storage_s3_cloudfront_baseurl=https://myendpoint.cloudfront.net/
 #openshift_hosted_registry_storage_s3_cloudfront_privatekeyfile=/full/path/to/secret.pem
 #openshift_hosted_registry_storage_s3_cloudfront_keypairid=yourpairid
+# vSphere Volume with vSphere Cloud Provider
+# openshift_hosted_registry_storage_kind=vsphere
+# openshift_hosted_registry_storage_access_modes=['ReadWriteOnce']
+# openshift_hosted_registry_storage_annotations=['volume.beta.kubernetes.io/storage-provisioner: kubernetes.io/vsphere-volume']
+#
+# GCS Storage Bucket
+#openshift_hosted_registry_storage_provider=gcs
+#openshift_hosted_registry_storage_gcs_bucket=bucket01
+#openshift_hosted_registry_storage_gcs_keyfile=test.key
+#openshift_hosted_registry_storage_gcs_rootdirectory=/registry
 
 # Metrics deployment
-# See: https://docs.openshift.com/enterprise/latest/install_config/cluster_metrics.html
+# See: https://docs.openshift.com/container-platform/latest/install_config/cluster_metrics.html
 #
 # By default metrics are not automatically deployed, set this to enable them
 #openshift_metrics_install_metrics=true
+#
+# metrics-server deployment
+# By default, metrics-server is not automatically deployed, unless metrics is also
+# deployed.  Deploying metrics-server is necessary to use the HorizontalPodAutoscaler.
+# Set this to enable it.
+#openshift_metrics_server_install=true
 #
 # Storage Options
 # If openshift_metrics_storage_kind is unset then metrics will be stored
@@ -554,17 +624,43 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 # Currently, you may only alter the hostname portion of the url, alterting the
 # `/hawkular/metrics` path will break installation of metrics.
 #openshift_metrics_hawkular_hostname=hawkular-metrics.example.com
-# Configure the prefix and version for the component images
-#openshift_metrics_image_prefix=docker.io/openshift/origin-
-#openshift_metrics_image_version=v3.7
+# Configure the metrics component images # Note, these will be modified by oreg_url by default
+#openshift_metrics_cassandra_image="docker.io/openshift/origin-metrics-cassandra:{{ openshift_image_tag }}"
+#openshift_metrics_hawkular_agent_image="docker.io/openshift/origin-metrics-hawkular-openshift-agent:{{ openshift_image_tag }}"
+#openshift_metrics_hawkular_metrics_image="docker.io/openshift/origin-metrics-hawkular-metrics:{{ openshift_image_tag }}"
+#openshift_metrics_schema_installer_image="docker.io/openshift/origin-metrics-schema-installer:{{ openshift_image_tag }}"
+#openshift_metrics_heapster_image="docker.io/openshift/origin-metrics-heapster:{{ openshift_image_tag }}"
 # when openshift_deployment_type=='openshift-enterprise'
-#openshift_metrics_image_prefix=registry.access.redhat.com/openshift3/
-#openshift_metrics_image_version=v3.7
+#openshift_metrics_cassandra_image="registry.redhat.io/openshift3/metrics-cassandra:{{ openshift_image_tag }}"
+#openshift_metrics_hawkular_agent_image="registry.redhat.io/openshift3/metrics-hawkular-openshift-agent:{{ openshift_image_tag }}"
+#openshift_metrics_hawkular_metrics_image="registry.redhat.io/openshift3/metrics-hawkular-metrics:{{ openshift_image_tag }}"
+#openshift_metrics_schema_installer_image="registry.redhat.io/openshift3/metrics-schema-installer:{{ openshift_image_tag }}"
+#openshift_metrics_heapster_image="registry.redhat.io/openshift3/metrics-heapster:{{ openshift_image_tag }}"
 #
 # StorageClass
 # openshift_storageclass_name=gp2
 # openshift_storageclass_parameters={'type': 'gp2', 'encrypted': 'false'}
+# openshift_storageclass_mount_options=['dir_mode=0777', 'file_mode=0777']
+# openshift_storageclass_reclaim_policy="Delete"
 #
+# PersistentLocalStorage
+# If Persistent Local Storage is wanted, this boolean can be defined to True.
+# This will create all necessary configuration to use persistent storage on nodes.
+#openshift_persistentlocalstorage_enabled=False
+#openshift_persistentlocalstorage_classes=[]
+#openshift_persistentlocalstorage_path=/mnt/local-storage
+#openshift_persistentlocalstorage_provisionner_image=quay.io/external_storage/local-volume-provisioner:v1.0.1
+
+# Cluster monitoring
+#
+# Cluster monitoring is enabled by default, disable it by setting
+# openshift_cluster_monitoring_operator_install=false
+#
+# Cluster monitoring configuration variables allow setting the amount of
+# storage requested through PersistentVolumeClaims.
+#
+# openshift_cluster_monitoring_operator_prometheus_storage_capacity="50Gi"
+# openshift_cluster_monitoring_operator_alertmanager_storage_capacity="2Gi"
 
 # Logging deployment
 #
@@ -616,83 +712,6 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 # Configure the number of elastic search nodes, unless you're using dynamic provisioning
 # this value must be 1
 #openshift_logging_es_cluster_size=1
-# Configure the prefix and version for the component images
-#openshift_logging_image_prefix=docker.io/openshift/origin-
-#openshift_logging_image_version=v3.7.0
-# when openshift_deployment_type=='openshift-enterprise'
-#openshift_logging_image_prefix=registry.access.redhat.com/openshift3/
-#openshift_logging_image_version=3.7.0
-
-# Prometheus deployment
-#
-# Currently prometheus deployment is disabled by default, enable it by setting this
-#openshift_hosted_prometheus_deploy=true
-#
-# Prometheus storage config
-# Option A - NFS Host Group
-# An NFS volume will be created with path "nfs_directory/volume_name"
-# on the host within the [nfs] host group.  For example, the volume
-# path using these options would be "/exports/prometheus"
-#openshift_prometheus_storage_kind=nfs
-#openshift_prometheus_storage_access_modes=['ReadWriteOnce']
-#openshift_prometheus_storage_nfs_directory=/exports
-#openshift_prometheus_storage_nfs_options='*(rw,root_squash)'
-#openshift_prometheus_storage_volume_name=prometheus
-#openshift_prometheus_storage_volume_size=10Gi
-#openshift_prometheus_storage_labels={'storage': 'prometheus'}
-#openshift_prometheus_storage_type='pvc'
-# For prometheus-alertmanager
-#openshift_prometheus_alertmanager_storage_kind=nfs
-#openshift_prometheus_alertmanager_storage_access_modes=['ReadWriteOnce']
-#openshift_prometheus_alertmanager_storage_nfs_directory=/exports
-#openshift_prometheus_alertmanager_storage_nfs_options='*(rw,root_squash)'
-#openshift_prometheus_alertmanager_storage_volume_name=prometheus-alertmanager
-#openshift_prometheus_alertmanager_storage_volume_size=10Gi
-#openshift_prometheus_alertmanager_storage_labels={'storage': 'prometheus-alertmanager'}
-#openshift_prometheus_alertmanager_storage_type='pvc'
-# For prometheus-alertbuffer
-#openshift_prometheus_alertbuffer_storage_kind=nfs
-#openshift_prometheus_alertbuffer_storage_access_modes=['ReadWriteOnce']
-#openshift_prometheus_alertbuffer_storage_nfs_directory=/exports
-#openshift_prometheus_alertbuffer_storage_nfs_options='*(rw,root_squash)'
-#openshift_prometheus_alertbuffer_storage_volume_name=prometheus-alertbuffer
-#openshift_prometheus_alertbuffer_storage_volume_size=10Gi
-#openshift_prometheus_alertbuffer_storage_labels={'storage': 'prometheus-alertbuffer'}
-#openshift_prometheus_alertbuffer_storage_type='pvc'
-#
-# Option B - External NFS Host
-# NFS volume must already exist with path "nfs_directory/_volume_name" on
-# the storage_host. For example, the remote volume path using these
-# options would be "nfs.example.com:/exports/prometheus"
-#openshift_prometheus_storage_kind=nfs
-#openshift_prometheus_storage_access_modes=['ReadWriteOnce']
-#openshift_prometheus_storage_host=nfs.example.com
-#openshift_prometheus_storage_nfs_directory=/exports
-#openshift_prometheus_storage_volume_name=prometheus
-#openshift_prometheus_storage_volume_size=10Gi
-#openshift_prometheus_storage_labels={'storage': 'prometheus'}
-#openshift_prometheus_storage_type='pvc'
-# For prometheus-alertmanager
-#openshift_prometheus_alertmanager_storage_kind=nfs
-#openshift_prometheus_alertmanager_storage_access_modes=['ReadWriteOnce']
-#openshift_prometheus_alertmanager_storage_host=nfs.example.com
-#openshift_prometheus_alertmanager_storage_nfs_directory=/exports
-#openshift_prometheus_alertmanager_storage_volume_name=prometheus-alertmanager
-#openshift_prometheus_alertmanager_storage_volume_size=10Gi
-#openshift_prometheus_alertmanager_storage_labels={'storage': 'prometheus-alertmanager'}
-#openshift_prometheus_alertmanager_storage_type='pvc'
-# For prometheus-alertbuffer
-#openshift_prometheus_alertbuffer_storage_kind=nfs
-#openshift_prometheus_alertbuffer_storage_access_modes=['ReadWriteOnce']
-#openshift_prometheus_alertbuffer_storage_host=nfs.example.com
-#openshift_prometheus_alertbuffer_storage_nfs_directory=/exports
-#openshift_prometheus_alertbuffer_storage_volume_name=prometheus-alertbuffer
-#openshift_prometheus_alertbuffer_storage_volume_size=10Gi
-#openshift_prometheus_alertbuffer_storage_labels={'storage': 'prometheus-alertbuffer'}
-#openshift_prometheus_alertbuffer_storage_type='pvc'
-#
-# Option C - none -- Prometheus, alertmanager and alertbuffer will use emptydir volumes
-# which are destroyed when pods are deleted
 
 # Configure the multi-tenant SDN plugin (default is 'redhat/openshift-ovs-subnet')
 # os_sdn_network_plugin_name='redhat/openshift-ovs-multitenant'
@@ -750,9 +769,9 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_master_console_port=8443
 
 # set exact RPM version (include - prefix)
-#openshift_pkg_version=-3.6.0
+#openshift_pkg_version=-3.11.0
 # you may also specify version and release, ie:
-#openshift_pkg_version=-3.7.0-0.126.0.git.0.9351aae.el7
+#openshift_pkg_version=-3.11.0-0.126.0.git.0.9351aae.el7
 
 # Configure custom ca certificate
 #openshift_master_ca_certificate={'certfile': '/path/to/ca.crt', 'keyfile': '/path/to/ca.key'}
@@ -764,8 +783,8 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 
 # Configure custom named certificates (SNI certificates)
 #
-# https://docs.openshift.org/latest/install_config/certificate_customization.html
-# https://docs.openshift.com/enterprise/latest/install_config/certificate_customization.html
+# https://docs.okd.io/latest/install_config/certificate_customization.html
+# https://docs.openshift.com/container-platform/latest/install_config/certificate_customization.html
 #
 # NOTE: openshift_master_named_certificates is cached on masters and is an
 # additive fact, meaning that each run with a different set of certificates
@@ -784,6 +803,10 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #
 # Detected names may be overridden by specifying the "names" key
 #openshift_master_named_certificates=[{"certfile": "/path/to/custom1.crt", "keyfile": "/path/to/custom1.key", "names": ["public-master-host.com"], "cafile": "/path/to/custom-ca1.crt"}]
+#
+# Add a trusted CA to all pods, copies from the control host, may be multiple
+# certs in one file
+#openshift_additional_ca=/path/to/additional-ca.crt
 
 # Session options
 #openshift_master_session_name=ssn
@@ -809,26 +832,18 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 # interface other than the default network interface.
 #openshift_set_node_ip=True
 
-# Configure dnsIP in the node config
-#openshift_dns_ip=172.30.0.1
-
-# Configure node kubelet arguments. pods-per-core is valid in OpenShift Origin 1.3 or OpenShift Container Platform 3.3 and later.
-#openshift_node_kubelet_args={'pods-per-core': ['10'], 'max-pods': ['250'], 'image-gc-high-threshold': ['85'], 'image-gc-low-threshold': ['80']}
+#openshift_node_kubelet_args is deprecated, use node config edits instead
 
 # Configure logrotate scripts
 # See: https://github.com/nickhammond/ansible-logrotate
 #logrotate_scripts=[{"name": "syslog", "path": "/var/log/cron\n/var/log/maillog\n/var/log/messages\n/var/log/secure\n/var/log/spooler\n", "options": ["daily", "rotate 7", "compress", "sharedscripts", "missingok"], "scripts": {"postrotate": "/bin/kill -HUP `cat /var/run/syslogd.pid 2> /dev/null` 2> /dev/null || true"}}]
 
-# openshift-ansible will wait indefinitely for your input when it detects that the
-# value of openshift_hostname resolves to an IP address not bound to any local
+# The OpenShift-Ansible installer will fail when it detects that the
+# value of openshift_kubelet_name_override resolves to an IP address not bound to any local
 # interfaces. This mis-configuration is problematic for any pod leveraging host
 # networking and liveness or readiness probes.
-# Setting this variable to true will override that check.
-#openshift_override_hostname_check=true
-
-# openshift_use_dnsmasq is deprecated.  This must be true, or installs will fail
-# in versions >= 3.6
-#openshift_use_dnsmasq=False
+# Setting this variable to false will override that check.
+#openshift_hostname_check=true
 
 # Define an additional dnsmasq.conf file to deploy to /etc/dnsmasq.d/openshift-ansible.conf
 # This is useful for POC environments where DNS may not actually be available yet or to set
@@ -860,7 +875,7 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 # configuration into Builds. Proxy related values will default to the global proxy
 # config values. You only need to set these if they differ from the global proxy settings.
 # See BuildDefaults documentation at
-# https://docs.openshift.org/latest/admin_guide/build_defaults_overrides.html
+# https://docs.okd.io/latest/admin_guide/build_defaults_overrides.html
 #openshift_builddefaults_http_proxy=http://USER:PASSWORD@HOST:PORT
 #openshift_builddefaults_https_proxy=https://USER:PASSWORD@HOST:PORT
 #openshift_builddefaults_no_proxy=mycorp.com
@@ -881,11 +896,12 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 # These options configure the BuildOverrides admission controller which injects
 # configuration into Builds.
 # See BuildOverrides documentation at
-# https://docs.openshift.org/latest/admin_guide/build_defaults_overrides.html
+# https://docs.okd.io/latest/admin_guide/build_defaults_overrides.html
 #openshift_buildoverrides_force_pull=true
 #openshift_buildoverrides_image_labels=[{'name':'imagelabelname1','value':'imagelabelvalue1'}]
 #openshift_buildoverrides_nodeselectors={'nodelabel1':'nodelabelvalue1'}
 #openshift_buildoverrides_annotations={'annotationkey1':'annotationvalue1'}
+#openshift_buildoverrides_tolerations=[{'key':'mykey1','value':'myvalue1','effect':'NoSchedule','operator':'Equal'}]
 
 # Or you may optionally define your own build overrides configuration serialized as json
 #openshift_buildoverrides_json='{"BuildOverrides":{"configuration":{"apiVersion":"v1","kind":"BuildDefaultsConfig","forcePull":"true"}}}'
@@ -896,19 +912,16 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 # Enable template service broker (requires service catalog to be enabled, above)
 #template_service_broker_install=true
 
-# Force a specific prefix (IE: registry) to use when pulling the service catalog image
-# NOTE: The registry all the way up to the start of the image name must be provided. Two examples
-# below are provided.
-#openshift_service_catalog_image_prefix=docker.io/openshift/origin-
-#openshift_service_catalog_image_prefix=registry.access.redhat.com/openshift3/ose-
-# Force a specific image version to use when pulling the service catalog image
-#openshift_service_catalog_image_version=v3.7
+# Specify an openshift_service_catalog image
+# (defaults for origin and openshift-enterprise, repsectively)
+#openshift_service_catalog_image="docker.io/openshift/origin-service-catalog:{{ openshift_image_tag }}""
+#openshift_service_catalog_image="registry.redhat.io/openshift3/ose-service-catalog:{{ openshift_image_tag }}"
 
 # Configure one of more namespaces whose templates will be served by the TSB
 #openshift_template_service_broker_namespaces=['openshift']
 
 # masterConfig.volumeConfig.dynamicProvisioningEnabled, configurable as of 1.2/3.2, enabled by default
-#openshift_master_dynamic_provisioning_enabled=False
+#openshift_master_dynamic_provisioning_enabled=True
 
 # Admission plugin config
 #openshift_master_admission_plugin_config={"ProjectRequestLimit":{"configuration":{"apiVersion":"v1","kind":"ProjectRequestLimitConfig","limits":[{"selector":{"admin":"true"}},{"maxProjects":"1"}]}},"PodNodeConstraints":{"configuration":{"apiVersion":"v1","kind":"PodNodeConstraintsConfig"}}}
@@ -918,24 +931,22 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 
 # OpenShift Per-Service Environment Variables
 # Environment variables are added to /etc/sysconfig files for
-# each OpenShift service: node, master (api and controllers).
+# each OpenShift node.
 # API and controllers environment variables are merged in single
 # master environments.
-#openshift_master_api_env_vars={"ENABLE_HTTP2": "true"}
-#openshift_master_controllers_env_vars={"ENABLE_HTTP2": "true"}
 #openshift_node_env_vars={"ENABLE_HTTP2": "true"}
 
 # Enable API service auditing
-#openshift_master_audit_config={"enabled": true}
+#openshift_master_audit_config={"enabled": "true"}
 #
 # In case you want more advanced setup for the auditlog you can
 # use this line.
 # The directory in "auditFilePath" will be created if it's not
 # exist
-#openshift_master_audit_config={"enabled": true, "auditFilePath": "/var/log/openpaas-oscp-audit/openpaas-oscp-audit.log", "maximumFileRetentionDays": 14, "maximumFileSizeMegabytes": 500, "maximumRetainedFiles": 5}
+#openshift_master_audit_config={"enabled": "true", "auditFilePath": "/var/lib/origin/openpaas-oscp-audit/openpaas-oscp-audit.log", "maximumFileRetentionDays": "14", "maximumFileSizeMegabytes": "500", "maximumRetainedFiles": "5"}
 
 # Enable origin repos that point at Centos PAAS SIG, defaults to true, only used
-# by deployment_type=origin
+# by openshift_deployment_type=origin
 #openshift_enable_origin_repo=false
 
 # Validity of the auto-generated OpenShift certificates in days.
@@ -981,6 +992,14 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 # openshift_upgrade_nodes_serial=4 openshift_upgrade_nodes_max_fail_percentage=49
 # where as this would not
 # openshift_upgrade_nodes_serial=4 openshift_upgrade_nodes_max_fail_percentage=50
+#
+# A timeout to wait for nodes to drain pods can be specified to ensure that the
+# upgrade continues even if nodes fail to drain pods in the allowed time. The
+# default value of 0 will wait indefinitely allowing the admin to investigate
+# the root cause and ensuring that disruption budgets are respected. If the
+# a timeout of 0 is used there will also be one attempt to re-try draining the
+# node. If a non zero timeout is specified there will be no attempt to retry.
+#openshift_upgrade_nodes_drain_timeout=0
 #
 # Multiple data migrations take place and if they fail they will fail the upgrade
 # You may wish to disable these or make them non fatal
@@ -1030,7 +1049,7 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #
 # LOCAL NFS NOTE:
 #
-# You may may also change this value if you want to change the default
+# You may also change this value if you want to change the default
 # path used for local NFS exports.
 #openshift_management_storage_nfs_base_dir: /exports
 
@@ -1066,24 +1085,9 @@ openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 
 #openshift_master_open_ports=[{"service":"svc1","port":"11/tcp"}]
 #openshift_node_open_ports=[{"service":"svc2","port":"12-13/tcp"},{"service":"svc3","port":"14/udp"}]
 
-# host group for masters
-[masters]
-ose3-master[1:3]-ansible.test.example.com
+# Service port node range
+#openshift_node_port_range=30000-32767
 
-[etcd]
-ose3-etcd[1:3]-ansible.test.example.com
-
-# NOTE: Containerized load balancer hosts are not yet supported, if using a global
-# containerized=true host variable we must set to false.
-[lb]
-ose3-lb-ansible.test.example.com containerized=false
-
-# NOTE: Currently we require that masters be part of the SDN which requires that they also be nodes
-# However, in order to ensure that your masters are not burdened with running pods you should
-# make them unschedulable by adding openshift_schedulable=False any node that's also a master.
-[nodes]
-ose3-master[1:3]-ansible.test.example.com
-ose3-node[1:2]-ansible.test.example.com openshift_node_labels="{'region': 'primary', 'zone': 'default'}"
-
-[nfs]
-ose3-nfs-ansible.test.example.com
+# Enable unsupported configurations, things that will yield a partially
+# functioning cluster but would not be supported for production use
+#openshift_enable_unsupported_configurations=false

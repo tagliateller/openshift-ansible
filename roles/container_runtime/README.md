@@ -5,13 +5,14 @@ Ensures docker package or system container is installed, and optionally raises t
 
 container-daemon.json items may be found at https://docs.docker.com/engine/reference/commandline/dockerd/#daemon-configuration-file
 
-This role is designed to be used with include_role and tasks_from.
+This role is designed to be used with import_role and tasks_from.
 
 Entry points
 ------------
 * package_docker.yml - install and setup docker container runtime.
 * systemcontainer_docker.yml - utilize docker + systemcontainer
 * systemcontainer_crio.yml - utilize crio + systemcontainer
+* package_crio.yml - install and setup crio container runtime.
 * registry_auth.yml - place docker login credentials.
 
 Requirements
@@ -30,7 +31,7 @@ Example Playbook
 
     - hosts: servers
       tasks:
-      - include_role: container_runtime
+      - import_role: container_runtime
         tasks_from: package_docker.yml
 
 License

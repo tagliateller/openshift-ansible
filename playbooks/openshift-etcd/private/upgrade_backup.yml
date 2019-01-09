@@ -1,26 +1,23 @@
 ---
 - name: Backup etcd
   hosts: oo_etcd_hosts_to_backup
-  roles:
-  - role: openshift_etcd_facts
-  post_tasks:
-  - include_role:
+  tasks:
+  - import_role:
       name: etcd
       tasks_from: backup.yml
     vars:
       r_etcd_common_backup_tag: "{{ etcd_backup_tag }}"
-      r_etcd_common_embedded_etcd: "{{ groups.oo_etcd_to_config | default([]) | length == 0 }}"
       r_etcd_common_backup_sufix_name: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+      r_etcd_common_skip_command_shim: true
 
 - name: Gate on etcd backup
   hosts: localhost
   connection: local
-  become: no
   tasks:
   - set_fact:
       etcd_backup_completed: "{{ hostvars
-                                 | oo_select_keys(groups.oo_etcd_hosts_to_backup)
-                                 | oo_collect('inventory_hostname', {'r_etcd_common_backup_complete': true}) }}"
+                                 | lib_utils_oo_select_keys(groups.oo_etcd_hosts_to_backup)
+                                 | lib_utils_oo_collect('inventory_hostname', {'r_etcd_common_backup_complete': true}) }}"
   - set_fact:
       etcd_backup_failed: "{{ groups.oo_etcd_hosts_to_backup | difference(etcd_backup_completed) | list }}"
   - fail:

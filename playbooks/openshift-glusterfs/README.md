@@ -26,6 +26,9 @@ file. The hosts in this group are the nodes of the GlusterFS cluster.
    devices but you must specify the following variables in `[OSEv3:vars]`:
    * `openshift_storage_glusterfs_is_missing=False`
    * `openshift_storage_glusterfs_heketi_is_missing=False`
+ * If GlusterFS will be running natively, the target hosts must also be listed
+   in the `nodes` group. They must also already be configured as OpenShift
+   nodes before this playbook runs.
 
 By default, pods for a native GlusterFS cluster will be created in the
 `default` namespace. To change this, specify
@@ -60,7 +63,7 @@ glusterfs
 
 [OSEv3:vars]
 ansible_ssh_user=root
-deployment_type=origin
+openshift_deployment_type=origin
 
 [masters]
 master
@@ -81,6 +84,15 @@ node2 glusterfs_devices='[ "/dev/sdd" ]'
 This playbook is intended for admins who want to deploy a hosted Docker
 registry with GlusterFS backend storage on an existing OpenShift cluster. It
 has all the same requirements and behaviors as `config.yml`.
+
+## Playbook: uninstall.yml
+
+This playbook is intended to uninstall all GlusterFS related resources
+on an existing OpenShift cluster.
+It has all the same requirements and behaviors as `config.yml`.
+
+If the variable `openshift_storage_glusterfs_wipe` is set as True,
+it clears the backend data as well.
 
 ## Role: openshift_storage_glusterfs
 

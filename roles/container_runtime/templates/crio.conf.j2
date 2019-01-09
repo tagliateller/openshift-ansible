@@ -27,7 +27,7 @@ storage_option = [
 [crio.api]
 
 # listen is the path to the AF_LOCAL socket on which crio will listen.
-listen = "/var/run/crio.sock"
+listen = "/var/run/crio/crio.sock"
 
 # stream_address is the IP address on which the stream server will listen
 stream_address = ""
@@ -37,7 +37,7 @@ stream_port = "10010"
 
 # file_locking is whether file-based locking will be used instead of
 # in-memory locking
-file_locking = true
+file_locking = false
 
 # The "crio.runtime" table contains settings pertaining to the OCI
 # runtime used and options for how to set up and manage the OCI runtime.
@@ -124,12 +124,12 @@ log_size_max = 52428800
 default_transport = "docker://"
 
 # pause_image is the image which we use to instantiate infra containers.
-pause_image = "kubernetes/pause"
+pause_image = "{{ openshift_crio_pause_image }}"
 
 # pause_command is the command to run in a pause_image to have a container just
 # sit there.  If the image contains the necessary information, this value need
 # not be specified.
-pause_command = "/pause"
+pause_command = "/usr/bin/pod"
 
 # signature_policy is the name of the file which decides what sort of policy we
 # use when deciding whether or not to trust an image that we've pulled.
@@ -141,24 +141,26 @@ signature_policy = ""
 # The valid values are mkdir and ignore.
 image_volumes = "mkdir"
 
+# CRI-O reads its configured registries defaults from the containers/image configuration
+# file, /etc/containers/registries.conf. Modify registries.conf if you want to
+# change default registries for all tools that use containers/image.  If you
+# want to modify just crio, you can change the registies configuration in this
+# file.
+
 # insecure_registries is used to skip TLS verification when pulling images.
-insecure_registries = [
-{{ l_insecure_crio_registries|default("") }}
-]
+# insecure_registries = []
 
 # registries is used to specify a comma separated list of registries to be used
 # when pulling an unqualified image (e.g. fedora:rawhide).
-registries = [
-{{ l_additional_crio_registries|default("") }}
-]
+# registries = []
 
 # The "crio.network" table contains settings pertaining to the
 # management of CNI plugins.
 [crio.network]
 
-# network_dir is is where CNI network configuration
+# network_dir is where CNI network configuration
 # files are stored.
 network_dir = "/etc/cni/net.d/"
 
-# plugin_dir is is where CNI plugin binaries are stored.
+# plugin_dir is where CNI plugin binaries are stored.
 plugin_dir = "/opt/cni/bin/"

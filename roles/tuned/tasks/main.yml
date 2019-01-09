@@ -9,10 +9,6 @@
 
 - name: Tuned service setup
   block:
-  - name: Set tuned OpenShift variables
-    set_fact:
-      openshift_tuned_guest_profile: "{{ 'atomic-guest' if openshift.common.is_atomic else 'virtual-guest' }}"
-
   - name: Ensure directory structure exists
     file:
       state: directory
@@ -28,7 +24,12 @@
     when: item.state == 'file'
 
   - name: Make tuned use the recommended tuned profile on restart
-    file: path=/etc/tuned/active_profile state=absent
+    file:
+      path: '{{ item }}'
+      state: absent
+    with_items:
+    - /etc/tuned/active_profile
+    - /etc/tuned/profile_mode
 
   - name: Restart tuned service
     systemd:

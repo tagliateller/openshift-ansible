@@ -9,13 +9,8 @@
   file:
     path: "{{ openshift.common.config_base }}/cloudprovider"
     state: directory
-  when: has_cloudprovider | bool
 
-- include_tasks: openstack.yml
-  when: cloudprovider_is_openstack | bool
-
-- include_tasks: aws.yml
-  when: cloudprovider_is_aws | bool
-
-- include_tasks: gce.yml
-  when: cloudprovider_is_gce | bool
+# Any files included here must use include_tasks instead of import_tasks due to
+# the dynamic nature of include_tasks
+- name: include the defined cloud provider files
+  include_tasks: "{{ openshift_cloudprovider_kind }}.yml"

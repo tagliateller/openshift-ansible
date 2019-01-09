@@ -61,8 +61,7 @@ under the appropriate groups.  Most variables can exist in the 'all' group.
 # Minimum mandatory provisioning variables.  See provisioning_vars.yml.example.
 # for more information.
 openshift_deployment_type: # 'origin' or 'openshift-enterprise'
-openshift_release: # example: v3.7
-openshift_pkg_version: # example: -3.7.0
+openshift_aws_clusterid: # example: example
 openshift_aws_ssh_key_name: # example: myuser_key
 openshift_aws_base_ami: # example: ami-12345678
 # These are required when doing SSL on the ELBs
@@ -134,7 +133,7 @@ At this point we have successfully created the infrastructure including the mast
 Now it is time to install Openshift using the openshift-ansible installer.  This can be achieved by running the following playbook:
 
 ```
-$ ansible-playbook -i inventory.yml install.yml @provisioning_vars.yml
+$ ansible-playbook -i inventory.yml install.yml -e @provisioning_vars.yml
 ```
 This playbook accomplishes the following:
 1. Builds a dynamic inventory file by querying AWS.
@@ -198,3 +197,21 @@ At this point your cluster should be ready for workloads.  Proceed to deploy app
 ### Still to come
 
 There are more enhancements that are arriving for provisioning.  These will include more playbooks that enhance the provisioning capabilities.
+
+## Uninstall / Deprovisioning
+
+To undo the work done by the prerequisites playbook, simply call the uninstall_prerequisites.yml playbook. You will have needed to remove any of the other objects (ie ELBs, instances, etc) before attempting. You should use the same inventory file and provisioning_vars.yml file that was used during provisioning.
+
+```
+ansible-playbook -i <previous inventory file> -e @<previous provisioning_vars file> uninstall_prerequisites.yml
+```
+
+This should result in removal of the security groups and VPC that were created.
+
+Cleaning up the S3 bucket contents can be accomplished with:
+
+```
+ansible-playbook -i <previous inventory file> -e @<previous provisioning_vars file> uninstall_s3.yml
+```
+
+NOTE: If you want to also remove the ssh keys that were uploaded (**these ssh keys would be shared if you are running multiple clusters in the same AWS account** so we don't remove these by default) then you should add 'openshift_aws_enable_uninstall_shared_objects: True' to your provisioning_vars.yml file.

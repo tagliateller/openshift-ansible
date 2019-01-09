@@ -10,7 +10,7 @@
 # The following objects are expected to be configured before the creation
 # of this Job:
 #   - A ConfigMap named 'inventory' with a key named 'hosts' that
-#     contains the the Ansible inventory file
+#     contains the Ansible inventory file
 #   - A Secret named 'sshkey' with a key named 'ssh-privatekey
 #     that contains the ssh key to connect to the hosts
 # (see examples/README.md for more details)
@@ -28,10 +28,10 @@ spec:
     spec:
       containers:
       - name: openshift-ansible
-        image: openshift/origin-ansible
+        image: docker.io/openshift/origin-ansible
         env:
         - name: PLAYBOOK_FILE
-          value: playbooks/certificate_expiry/easy-mode-upload.yaml
+          value: playbooks/openshift-checks/certificate_expiry/easy-mode-upload.yaml
         - name: INVENTORY_FILE
           value: /tmp/inventory/hosts       # from configmap vol below
         - name: ANSIBLE_PRIVATE_KEY_FILE    # from secret vol below

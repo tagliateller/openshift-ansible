@@ -3,16 +3,13 @@ import pytest
 from openshift_checks.package_availability import PackageAvailability
 
 
-@pytest.mark.parametrize('pkg_mgr,is_containerized,is_active', [
-    ('yum', False, True),
-    ('yum', True, False),
-    ('dnf', True, False),
-    ('dnf', False, False),
+@pytest.mark.parametrize('pkg_mgr,is_active', [
+    ('yum', True),
+    ('dnf', False),
 ])
-def test_is_active(pkg_mgr, is_containerized, is_active):
+def test_is_active(pkg_mgr, is_active):
     task_vars = dict(
         ansible_pkg_mgr=pkg_mgr,
-        openshift=dict(common=dict(is_containerized=is_containerized)),
     )
     assert PackageAvailability(None, task_vars).is_active() == is_active
 
@@ -21,14 +18,14 @@ def test_is_active(pkg_mgr, is_containerized, is_active):
     (
         dict(openshift_service_type='origin'),
         set(),
-        set(['openshift-master', 'openshift-node']),
+        set(['openshift-hyperkube', 'openshift-node']),
     ),
     (
         dict(
             openshift_service_type='origin',
             group_names=['oo_masters_to_config'],
         ),
-        set(['origin-master']),
+        set(['origin-hyperkube']),
         set(['origin-node']),
     ),
     (
@@ -37,14 +34,14 @@ def test_is_active(pkg_mgr, is_containerized, is_active):
             group_names=['oo_nodes_to_config'],
         ),
         set(['atomic-openshift-node']),
-        set(['atomic-openshift-master']),
+        set(['atomic-openshift-hyperkube']),
     ),
     (
         dict(
             openshift_service_type='atomic-openshift',
             group_names=['oo_masters_to_config', 'oo_nodes_to_config'],
         ),
-        set(['atomic-openshift-master', 'atomic-openshift-node']),
+        set(['atomic-openshift-hyperkube', 'atomic-openshift-node']),
         set(),
     ),
 ])

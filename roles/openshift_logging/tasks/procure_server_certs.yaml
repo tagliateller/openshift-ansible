@@ -1,11 +1,19 @@
 ---
 - name: Checking for {{ cert_info.procure_component }}.crt
-  stat: path="{{generated_certs_dir}}/{{ cert_info.procure_component }}.crt"
+  stat:
+    path: "{{generated_certs_dir}}/{{ cert_info.procure_component }}.crt"
+    get_checksum: false
+    get_attributes: false
+    get_mime: false
   register: component_cert_file
   check_mode: no
 
 - name: Checking for {{ cert_info.procure_component }}.key
-  stat: path="{{generated_certs_dir}}/{{ cert_info.procure_component }}.key"
+  stat:
+    path: "{{generated_certs_dir}}/{{ cert_info.procure_component }}.key"
+    get_checksum: false
+    get_attributes: false
+    get_mime: false
   register: component_key_file
   check_mode: no
 
@@ -27,7 +35,7 @@
 
 - name: Creating signed server cert and key for {{ cert_info.procure_component }}
   command: >
-     {{ openshift.common.client_binary }} adm --config={{ mktemp.stdout }}/admin.kubeconfig ca create-server-cert
+     {{ openshift_client_binary }} adm --config={{ mktemp.stdout }}/admin.kubeconfig ca create-server-cert
      --key={{generated_certs_dir}}/{{cert_info.procure_component}}.key --cert={{generated_certs_dir}}/{{cert_info.procure_component}}.crt
      --hostnames={{cert_info.hostnames|quote}} --signer-cert={{generated_certs_dir}}/ca.crt --signer-key={{generated_certs_dir}}/ca.key
      --signer-serial={{generated_certs_dir}}/ca.serial.txt
